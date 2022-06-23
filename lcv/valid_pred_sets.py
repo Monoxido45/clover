@@ -7,14 +7,14 @@ Created on Tue Jun 14 10:17:56 2022
 """
 from __future__ import division
 
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.base import clone
 from scipy import stats
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import QuantileRegressor
-from sklearn.utils.validation import check_is_fitted
+from sklearn.ensemble import GradientBoostingRegressor
 
 class Valid_pred_sets(BaseEstimator):
     '''
@@ -33,7 +33,7 @@ class Valid_pred_sets(BaseEstimator):
         self.alpha = alpha
         
     
-    def fit(self, X_calib, y_calib, random_seed = None, test_size = 0.4):
+    def fit(self, X_calib, y_calib, random_seed = None, test_size = 0.2):
         # predicting each interval
         preds = self.conf.predict(X_calib, significance = self.alpha)
         
@@ -57,7 +57,7 @@ class Valid_pred_sets(BaseEstimator):
         
         # observed statistic
         r = self.model.predict_proba(self.X_test)[:, 1]
-        t_obs = np.mean((r  - (1 - self.alpha))**(2))
+        t_obs = np.mean(np.abs(r  - (1 - self.alpha)))
         
         # computing monte-carlo samples
         np.random.seed(random_seed)
@@ -72,17 +72,19 @@ class Valid_pred_sets(BaseEstimator):
                 new_r = self.pred
             else:
                 new_r = self.pred[:, 1]
-            t_b[i] = np.mean((new_r - (1 - self.alpha))**2)
+            t_b[i] = np.mean(np.abs(new_r - (1 - self.alpha)))
         
         # computing p-value from the proportion of generated t's larger than the observed t
         p_value = (t_b > t_obs).mean()
-        return p_value
+        return {"p-value":p_value, "Observed statistic":t_obs}
 
 
 # creating a adapter class to quantile regression in python which outputs a matrix of predictions
  
 class LinearQuantileRegression(BaseEstimator):
-    def __init__(self, coverage, alpha = 1, 
+    def __init__(self, 
+                 coverage = 0.05, 
+                 alpha = 1, 
                   fit_intercept = True, 
                   solver = 'interior-point', 
                   solver_options=None):
@@ -118,6 +120,62 @@ class LinearQuantileRegression(BaseEstimator):
         interval = np.vstack((lower, upper)).T
         return interval
         
+# gradient boosting quantile regression for conformal prediction
+class GradientBoostingQuantileRegression(BaseEstimator):
+    def __init__(self, 
+                 coverage = 0.05,
+                 loss = "quantile",
+                 **kwargs):
+        self.coverage = coverage
+        self.loss = loss
+        quantiles = [self.coverage/2, 1 - self.coverage/2]       
+        self.lower = GradientBoostingRegressor(loss = self.loss,
+                                               alpha = quantiles[0], 
+                                               **kwargs)
+        self.upper = clone(GradientBoostingRegressor(loss = self.loss,
+                                                     alpha = quantiles[1], 
+                                                     **kwargs))
     
+    def fit(self, X, y):
+        self.lower.fit(X, y)
+        self.upper.fit(X, y)
+        return self
+    
+    def predict(self, X, **kwargs):
+        lower = self.lower.predict(X)
+        upper = self.upper.predict(X)
+        interval = np.vstack((lower, upper)).T
+        return interval
+
+# random forest boosting quantile regression form conformal prediction
+class RandomForestQuantileRegression(BaseEstimator):
+    def __init__(self,
+                 coverage = 0.05,
+                 **kwargs):
+        self.coverage = coverage
+        self.model = RandomForestRegressor(**kwargs)
+    
+    def fit(self, X, y):
+        self.model.fit(X, y)
+        return self
+    
+    def predict(self, X):
+        cart_data = np.zeros((X.shape[0], len(self.model.estimators_)))
+        i = 0
+        
+        for cart in self.model.estimators_:
+            cart_data[:, i] = cart.predict(X)
+            i += 1
+            
+        quantiles = [self.coverage/2, 1 - self.coverage/2]  
+        lower = np.quantile(cart_data, quantiles[0], axis = 1)
+        upper = np.quantile(cart_data, quantiles[1], axis = 1)
+        intervals = np.vstack((lower, upper)).T
+        
+        return intervals
+
+
+
+
     
     
