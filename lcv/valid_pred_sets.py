@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Jun 14 10:17:56 2022
 
-@author: kuben
-"""
 from __future__ import division
 
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -15,6 +11,7 @@ from scipy import stats
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import QuantileRegressor
 from sklearn.ensemble import GradientBoostingRegressor
+from tensorflow import keras
 
 class Valid_pred_sets(BaseEstimator):
     '''
@@ -23,15 +20,17 @@ class Valid_pred_sets(BaseEstimator):
     '''
     def __init__(self,
                  conf,
-                 alpha):
+                 alpha,
+                 coverage_evaluator = "RF"):
         '''
-        Input:  (i)  conf_model: already calibrated Conformal prediction model from nonconformist package
+        Input:  (i)  conf: already calibrated Conformal prediction model from nonconformist package or any model with predict method
                 (ii) alpha: significance level for testing
+                (iii) Which coverage evalutor to use: random forest (RF) or neural networks (nnet)
         '''
         
         self.conf = conf
         self.alpha = alpha
-        
+        self.coverage_evaluator = coverage_evaluator
     
     def fit(self, X_calib, y_calib, random_seed = 1250, test_size = 0.2, **kwargs):
         # predicting each interval
@@ -45,19 +44,83 @@ class Valid_pred_sets(BaseEstimator):
         self.X_train, self.X_test, self.w_train, self.w_test = train_test_split(X_calib,w,
                                                                                 test_size = test_size)
         
-        # regressing w on x using random forest model
-        self.model = RandomForestClassifier(**kwargs).fit(self.X_train, self.w_train)
+        # regressing w on x using select coverage evaluator model
+        return self._init_coverage_evaluator(random_seed = random_seed, **kwargs)
+    
+    def _init_coverage_evaluator(self, random_seed, **kwargs):
+        if self.coverage_evaluator == "RF":
+            self.model = RandomForestClassifier(**kwargs).fit(self.X_train, self.w_train)
+        else:
+            # defining nnet model
+            self.model = keras.models.Sequential([
+                keras.layers.Dense(units = 10, 
+                                   input_dim = self.X_train.shape[1],
+                                   activation = "relu",
+                                   kernel_initializer = keras.initializers.RandomUniform(
+                                       minval=-0.05, maxval=0.05, seed = random_seed),
+                       bias_initializer='zeros'),
+                keras.layers.Dropout(0.5),
+                keras.layers.Dense(units = 1, activation = "sigmoid",
+                      kernel_initializer=keras.initializers.RandomUniform(
+                          minval=-0.05, maxval=0.05, seed = random_seed),
+                       bias_initializer='zeros')])
+            
+            # compiling
+            self.model.compile(loss = "binary_crossentropy",
+                               optimizer = keras.optimizers.Adamax(learning_rate = 0.1),
+                               metrics=['accuracy'])
+            # obtaining initial weights
+            self.model_init_weights = self.model.get_weights()
+            
+            # fitting and adding early stopping
+            self.es = keras.callbacks.EarlyStopping(monitor = "val_loss", patience = 15)
+            self.model.fit(self.X_train, self.w_train, validation_split = 0.3, 
+                           epochs = 100, batch_size = 30, callbacks = [self.es], verbose = 0)
+            
         return self
+    
+    
+    def predict(self, X_test):
+        if self.coverage_evaluator == "RF":
+            pred = self.model.predict_proba(X_test)
+            if len(pred[0]) == 1:
+                return pred
+            else:
+                return pred[:, 1]
+        else:
+            pred = self.model.predict(X_test, verbose = 0).flatten(order = "C")
+            return pred
+        
+    
+    def retrain(self, X_train, new_w, X_test):
+        if self.coverage_evaluator == "RF":
+            model_temp = clone(self.model).fit(X_train, new_w)
+            pred = model_temp.predict_proba(self.X_test)
+            if len(pred[0]) == 1:
+                new_r = pred
+            else:
+                new_r = pred[:, 1]
+            return new_r
+        else:
+            model_temp = keras.model.clone_model(self.model)
+            model_temp.set_weights(self.model_init_weights)
+            model_temp.fit(X_train, new_w, validation_split = 0.3, 
+                           epochs = 100, batch_size = 30, 
+                           callbacks = [self.es], 
+                           verbose = 0)
+            new_r = model_temp.predict(X_test, verbose = 0).flatten(order = "C")
+            return new_r
+        
     
     def check(self, i):
         return "Iteracao %d" %i
     
     def r_prob(self, X_grid):
         # predicting for each x in X_grid
-        r = self.model.predict_proba(X_grid)[:, 1]
+        r = self.predict(X_grid)
         return r
     
-    def monte_carlo_test(self, B = 1000, random_seed = 1250, **kwargs):      
+    def monte_carlo_test(self, B = 1000, random_seed = 1250):      
         # observed statistic
         r = self.model.predict_proba(self.X_test)[:, 1]
         t_obs = np.mean(np.abs(r  - (1 - self.alpha)))
@@ -68,13 +131,8 @@ class Valid_pred_sets(BaseEstimator):
         
         # generating new weights from bernoulli
         for i in range(B):
-            self.new_w = stats.binom.rvs(n = 1, p = 1 - self.alpha, size = self.w_train.shape[0])
-            model_temp = RandomForestClassifier(**kwargs).fit(self.X_train, self.new_w)
-            self.pred = model_temp.predict_proba(self.X_test)
-            if len(self.pred[0]) == 1:
-                new_r = self.pred
-            else:
-                new_r = self.pred[:, 1]
+            new_w = stats.binom.rvs(n = 1, p = 1 - self.alpha, size = self.w_train.shape[0])
+            new_r = self.retrain(self.X_train, new_w, self.X_test)
             t_b[i] = np.mean(np.abs(new_r - (1 - self.alpha)))
         
         # computing p-value from the proportion of generated t's larger than the observed t
