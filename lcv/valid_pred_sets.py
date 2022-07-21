@@ -12,6 +12,8 @@ from sklearn.base import BaseEstimator
 from sklearn.linear_model import QuantileRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from tensorflow import keras
+from tensorflow.random import set_seed
+from pygam import LogisticGAM
 
 class Valid_pred_sets(BaseEstimator):
     '''
@@ -36,6 +38,7 @@ class Valid_pred_sets(BaseEstimator):
         # predicting each interval
         preds = self.conf.predict(X_calib, significance = self.alpha)
         np.random.seed(random_seed)
+        set_seed(random_seed + 2)
         # obtaining each w
         w = np.zeros(y_calib.shape[0])
         for i in range(y_calib.shape[0]):
@@ -50,32 +53,50 @@ class Valid_pred_sets(BaseEstimator):
     def _init_coverage_evaluator(self, random_seed, **kwargs):
         if self.coverage_evaluator == "RF":
             self.model = RandomForestClassifier(**kwargs).fit(self.X_train, self.w_train)
+        elif self.coverage_evaluator == "GAM":
+            self.model = LogisticGAM().gridsearch(self.X_train, self.w_train).fit(self.X_train, self.w_train)
         else:
+            # setting tensorflow and numpy seeds to guarantee reproducibility
+            np.random.seed(random_seed)
+            set_seed(random_seed + 2)
+            
             # defining nnet model
             self.model = keras.models.Sequential([
-                keras.layers.Dense(units = 10, 
+                keras.layers.Dense(units = 64, 
                                    input_dim = self.X_train.shape[1],
-                                   activation = "relu",
-                                   kernel_initializer = keras.initializers.RandomUniform(
-                                       minval=-0.05, maxval=0.05, seed = random_seed),
+                                   activation = "selu",
+                                   kernel_initializer = keras.initializers.LecunNormal(
+                                       seed = random_seed),
                        bias_initializer='zeros'),
+                keras.layers.Dropout(0.65),
+                keras.layers.Dense(units = 32,
+                                   activation = "selu",
+                                   kernel_initializer = keras.initializers.LecunNormal(
+                                       seed = random_seed),
+                                   bias_initializer='zeros'),
                 keras.layers.Dropout(0.5),
+                keras.layers.Dense(units = 16,
+                                   activation = "selu",
+                                   kernel_initializer = keras.initializers.LecunNormal(
+                                       seed = random_seed),
+                                   bias_initializer='zeros'),
+                keras.layers.Dropout(0.35),
                 keras.layers.Dense(units = 1, activation = "sigmoid",
-                      kernel_initializer=keras.initializers.RandomUniform(
-                          minval=-0.05, maxval=0.05, seed = random_seed),
+                      kernel_initializer = keras.initializers.LecunNormal(
+                                       seed = random_seed),
                        bias_initializer='zeros')])
             
             # compiling
             self.model.compile(loss = "binary_crossentropy",
-                               optimizer = keras.optimizers.Adamax(learning_rate = 0.1),
+                               optimizer = keras.optimizers.Adamax(learning_rate = 0.025),
                                metrics=['accuracy'])
             # obtaining initial weights
             self.model_init_weights = self.model.get_weights()
             
             # fitting and adding early stopping
-            self.es = keras.callbacks.EarlyStopping(monitor = "val_loss", patience = 15)
-            self.model.fit(self.X_train, self.w_train, validation_split = 0.3, 
-                           epochs = 100, batch_size = 30, callbacks = [self.es], verbose = 0)
+            self.es = keras.callbacks.EarlyStopping(monitor = "val_loss", patience = 20)
+            self.history = self.model.fit(self.X_train, self.w_train, validation_split = 0.33, 
+                           epochs = 100, batch_size = 50, callbacks = [self.es], verbose = 0)
             
         return self
     
@@ -87,10 +108,12 @@ class Valid_pred_sets(BaseEstimator):
                 return pred
             else:
                 return pred[:, 1]
+        elif self.coverage_evaluator == "GAM":
+            pred = self.model.predict_proba(X_test)
+            return pred
         else:
             pred = self.model.predict(X_test, verbose = 0).flatten(order = "C")
             return pred
-        
     
     def retrain(self, X_train, new_w, X_test):
         if self.coverage_evaluator == "RF":
@@ -101,11 +124,18 @@ class Valid_pred_sets(BaseEstimator):
             else:
                 new_r = pred[:, 1]
             return new_r
+        elif self.coverage_evaluator == "GAM":
+            model_temp = LogisticGAM().grid_search(X_train, new_w).fit(X_train, new_w)
+            new_r = model_temp.predict_proba(self.X_test)
+            return new_r
         else:
-            model_temp = keras.model.clone_model(self.model)
+            model_temp = keras.models.clone_model(self.model)
             model_temp.set_weights(self.model_init_weights)
-            model_temp.fit(X_train, new_w, validation_split = 0.3, 
-                           epochs = 100, batch_size = 30, 
+            model_temp.compile(loss = "binary_crossentropy",
+                               optimizer = keras.optimizers.Adamax(learning_rate = 0.025),
+                               metrics=['accuracy'])
+            model_temp.fit(X_train, new_w, validation_split = 0.33, 
+                           epochs = 100, batch_size = 50, 
                            callbacks = [self.es], 
                            verbose = 0)
             new_r = model_temp.predict(X_test, verbose = 0).flatten(order = "C")
@@ -122,7 +152,7 @@ class Valid_pred_sets(BaseEstimator):
     
     def monte_carlo_test(self, B = 1000, random_seed = 1250):      
         # observed statistic
-        r = self.model.predict_proba(self.X_test)[:, 1]
+        r = self.predict(self.X_test)
         t_obs = np.mean(np.abs(r  - (1 - self.alpha)))
         
         # computing monte-carlo samples
