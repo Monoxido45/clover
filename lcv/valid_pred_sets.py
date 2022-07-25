@@ -88,7 +88,7 @@ class Valid_pred_sets(BaseEstimator):
             
             # compiling
             self.model.compile(loss = "binary_crossentropy",
-                               optimizer = keras.optimizers.Adamax(learning_rate = 0.025),
+                               optimizer = keras.optimizers.Adam(learning_rate = 0.0025),
                                metrics=['accuracy'])
             # obtaining initial weights
             self.model_init_weights = self.model.get_weights()
@@ -132,7 +132,7 @@ class Valid_pred_sets(BaseEstimator):
             model_temp = keras.models.clone_model(self.model)
             model_temp.set_weights(self.model_init_weights)
             model_temp.compile(loss = "binary_crossentropy",
-                               optimizer = keras.optimizers.Adamax(learning_rate = 0.025),
+                               optimizer = keras.optimizers.Adam(learning_rate = 0.0025),
                                metrics=['accuracy'])
             model_temp.fit(X_train, new_w, validation_split = 0.33, 
                            epochs = 100, batch_size = 50, 
@@ -154,8 +154,7 @@ class Valid_pred_sets(BaseEstimator):
         # observed statistic
         r = self.predict(self.X_test)
         t_obs = np.mean(np.abs(r  - (1 - self.alpha)))
-        
-        # computing monte-carlo samples
+                # computing monte-carlo samples
         np.random.seed(random_seed)
         t_b = np.zeros(B)
         
