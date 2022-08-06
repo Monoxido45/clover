@@ -11,9 +11,14 @@ from scipy import stats
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import QuantileRegressor
 from sklearn.ensemble import GradientBoostingRegressor
-from tensorflow import keras
+from coverage_evaluator import Coverage_evaluator
 from tensorflow.random import set_seed
 from pygam import LogisticGAM
+import joblib
+
+# function to unwrap monte carlo testing for paralelization
+def unwrap_par_self(arg, **kwarg):
+    return Valid_pred_sets._retrain_loop_par(*arg, **kwarg)
 
 class Valid_pred_sets(BaseEstimator):
     '''
@@ -56,48 +61,8 @@ class Valid_pred_sets(BaseEstimator):
         elif self.coverage_evaluator == "GAM":
             self.model = LogisticGAM().gridsearch(self.X_train, self.w_train).fit(self.X_train, self.w_train)
         else:
-            # setting tensorflow and numpy seeds to guarantee reproducibility
-            np.random.seed(random_seed)
-            set_seed(random_seed + 2)
-            
-            # defining nnet model
-            self.model = keras.models.Sequential([
-                keras.layers.Dense(units = 64, 
-                                   input_dim = self.X_train.shape[1],
-                                   activation = "selu",
-                                   kernel_initializer = keras.initializers.LecunNormal(
-                                       seed = random_seed),
-                       bias_initializer='zeros'),
-                keras.layers.Dropout(0.65),
-                keras.layers.Dense(units = 32,
-                                   activation = "selu",
-                                   kernel_initializer = keras.initializers.LecunNormal(
-                                       seed = random_seed),
-                                   bias_initializer='zeros'),
-                keras.layers.Dropout(0.5),
-                keras.layers.Dense(units = 16,
-                                   activation = "selu",
-                                   kernel_initializer = keras.initializers.LecunNormal(
-                                       seed = random_seed),
-                                   bias_initializer='zeros'),
-                keras.layers.Dropout(0.35),
-                keras.layers.Dense(units = 1, activation = "sigmoid",
-                      kernel_initializer = keras.initializers.LecunNormal(
-                                       seed = random_seed),
-                       bias_initializer='zeros')])
-            
-            # compiling
-            self.model.compile(loss = "binary_crossentropy",
-                               optimizer = keras.optimizers.Adam(learning_rate = 0.0025),
-                               metrics=['accuracy'])
-            # obtaining initial weights
-            self.model_init_weights = self.model.get_weights()
-            
-            # fitting and adding early stopping
-            self.es = keras.callbacks.EarlyStopping(monitor = "val_loss", patience = 20)
-            self.history = self.model.fit(self.X_train, self.w_train, validation_split = 0.33, 
-                           epochs = 100, batch_size = 50, callbacks = [self.es], verbose = 0)
-            
+            # using pytorch coverage_evalutor class
+            self.model = Coverage_evaluator(seed = random_seed, **kwargs).fit(self.X_train, self.w_train)
         return self
     
     
@@ -112,7 +77,7 @@ class Valid_pred_sets(BaseEstimator):
             pred = self.model.predict_proba(X_test)
             return pred
         else:
-            pred = self.model.predict(X_test, verbose = 0).flatten(order = "C")
+            pred = self.model.predict(X_test).flatten(order = "C")
             return pred
     
     def retrain(self, X_train, new_w, X_test):
@@ -150,20 +115,34 @@ class Valid_pred_sets(BaseEstimator):
         r = self.predict(X_grid)
         return r
     
-    def monte_carlo_test(self, B = 1000, random_seed = 1250):      
+    def _retrain_loop_par(self, seed):
+        np.random.seed(seed)
+        new_w = stats.binom.rvs(n = 1, p = 1 - self.alpha, size = self.w_train.shape[0])
+        new_r = self.retrain(self.X_train, new_w, self.X_test)
+        return np.mean(np.abs(new_r - (1 - self.alpha)))
+    
+    def monte_carlo_test(self, B = 1000, random_seed = 1250, par = False):      
         # observed statistic
         r = self.predict(self.X_test)
         t_obs = np.mean(np.abs(r  - (1 - self.alpha)))
-                # computing monte-carlo samples
+        
+        # computing monte-carlo samples
         np.random.seed(random_seed)
-        t_b = np.zeros(B)
         
         # generating new weights from bernoulli
-        for i in range(B):
-            new_w = stats.binom.rvs(n = 1, p = 1 - self.alpha, size = self.w_train.shape[0])
-            new_r = self.retrain(self.X_train, new_w, self.X_test)
-            t_b[i] = np.mean(np.abs(new_r - (1 - self.alpha)))
-        
+        if not par:
+            t_b = np.zeros(B)
+            for i in range(B):
+                new_w = stats.binom.rvs(n = 1, p = 1 - self.alpha, size = self.w_train.shape[0])
+                new_r = self.retrain(self.X_train, new_w, self.X_test)
+                t_b[i] = np.mean(np.abs(new_r - (1 - self.alpha)))
+        else:
+            cpus = joblib.cpu_count()
+            seeds = np.random.randint(1e8, size = B)
+            t_b = joblib.Parallel(n_jobs = cpus - 1)(joblib.delayed(
+                unwrap_par_self)(seed) for seed in seeds)
+            t_b = np.array(t_b)
+            
         # computing p-value from the proportion of generated t's larger than the observed t
         p_value = (t_b > t_obs).mean()
         return {"p-value":p_value, "Observed statistic":t_obs}
