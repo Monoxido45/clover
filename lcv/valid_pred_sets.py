@@ -1,24 +1,47 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from __future__ import division
 
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+# basic libraries to use
 import numpy as np
+from scipy import stats
+
+# sklearn modules
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.base import clone
-from scipy import stats
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import QuantileRegressor
 from sklearn.ensemble import GradientBoostingRegressor
-from coverage_evaluator import Coverage_evaluator
-from tensorflow.random import set_seed
-from pygam import LogisticGAM
-import joblib
 
-# function to unwrap monte carlo testing for paralelization
-def unwrap_par_self(arg, **kwarg):
-    return Valid_pred_sets._retrain_loop_par(*arg, **kwarg)
+# nnet coverage evaluator, gam model and pararelism library
+from coverage_evaluator import Coverage_evaluator
+from pygam import LogisticGAM
+from copy import deepcopy
+import multiprocessing as mp
+
+# creating paralelized function outside of class
+def _retrain_loop_par(coverage_evaluator, model, alpha, X_train, w_train, X_test, seed):
+        np.random.seed(seed)
+        new_w = stats.binom.rvs(n = 1, p = 1 - alpha, size = w_train.shape[0])
+        new_r = retrain_par(coverage_evaluator, model, X_train, new_w, X_test)
+        return np.mean(np.abs(new_r - (1 - alpha)))
+
+def retrain_par(coverage_evaluator, model, X_train, new_w, X_test):
+    if coverage_evaluator == "RF":
+        model_temp = clone(model).fit(X_train, new_w)
+        pred = model_temp.predict_proba(X_test)
+        if len(pred[0]) == 1:
+            new_r = pred
+        else:
+            new_r = pred[:, 1]
+        return new_r
+    elif coverage_evaluator == "GAM":
+        model_temp = LogisticGAM().grid_search(X_train, new_w).fit(X_train, new_w)
+        new_r = model_temp.predict_proba(X_test)
+        return new_r
+    else:
+        model_temp = deepcopy(model).fit(X_train, new_w)
+        new_r = model_temp.predict(X_test).flatten(order = "C")
+        return new_r
 
 class Valid_pred_sets(BaseEstimator):
     '''
@@ -44,7 +67,6 @@ class Valid_pred_sets(BaseEstimator):
         # predicting each interval
         preds = self.conf.predict(X_calib, significance = self.alpha)
         np.random.seed(random_seed)
-        set_seed(random_seed + 2)
         # obtaining each w
         w = np.zeros(y_calib.shape[0])
         for i in range(y_calib.shape[0]):
@@ -95,32 +117,20 @@ class Valid_pred_sets(BaseEstimator):
             new_r = model_temp.predict_proba(self.X_test)
             return new_r
         else:
-            model_temp = keras.models.clone_model(self.model)
-            model_temp.set_weights(self.model_init_weights)
-            model_temp.compile(loss = "binary_crossentropy",
-                               optimizer = keras.optimizers.Adam(learning_rate = 0.0025),
-                               metrics=['accuracy'])
-            model_temp.fit(X_train, new_w, validation_split = 0.33, 
-                           epochs = 100, batch_size = 50, 
-                           callbacks = [self.es], 
-                           verbose = 0)
-            new_r = model_temp.predict(X_test, verbose = 0).flatten(order = "C")
+            model_temp = deepcopy(self.model).fit(X_train, new_w)
+            new_r = model_temp.predict(X_test).flatten(order = "C")
             return new_r
-        
-    
-    def check(self, i):
-        return "Iteracao %d" %i
     
     def r_prob(self, X_grid):
         # predicting for each x in X_grid
         r = self.predict(X_grid)
         return r
     
-    def _retrain_loop_par(self, seed):
-        np.random.seed(seed)
-        new_w = stats.binom.rvs(n = 1, p = 1 - self.alpha, size = self.w_train.shape[0])
-        new_r = self.retrain(self.X_train, new_w, self.X_test)
-        return np.mean(np.abs(new_r - (1 - self.alpha)))
+    #def _retrain_loop_par(self, seed):
+     #   np.random.seed(seed)
+      #  new_w = stats.binom.rvs(n = 1, p = 1 - self.alpha, size = self.w_train.shape[0])
+       # new_r = self.retrain(self.X_train, new_w, self.X_test)
+        #return np.mean(np.abs(new_r - (1 - self.alpha)))
     
     def monte_carlo_test(self, B = 1000, random_seed = 1250, par = False):      
         # observed statistic
@@ -138,19 +148,25 @@ class Valid_pred_sets(BaseEstimator):
                 new_r = self.retrain(self.X_train, new_w, self.X_test)
                 t_b[i] = np.mean(np.abs(new_r - (1 - self.alpha)))
         else:
-            cpus = joblib.cpu_count()
+            ctx = mp.get_context("spawn")
+            cpus = mp.cpu_count()
+            pool = ctx.Pool(cpus - 1)
             seeds = np.random.randint(1e8, size = B)
-            t_b = joblib.Parallel(n_jobs = cpus - 1)(joblib.delayed(
-                unwrap_par_self)(seed) for seed in seeds)
-            t_b = np.array(t_b)
+            t_b = []
+            for seed in seeds:
+                result = pool.apply_async(_retrain_loop_par,
+                args = (self.coverage_evaluator, self.model, self.alpha, self.X_train, self.w_train, self.X_test, seed))
+                t_b.append(result)
+
+            pool.close()
+            
+            return np.array(t_b)
             
         # computing p-value from the proportion of generated t's larger than the observed t
         p_value = (t_b > t_obs).mean()
         return {"p-value":p_value, "Observed statistic":t_obs}
 
-
 # creating a adapter class to quantile regression in python which outputs a matrix of predictions
- 
 class LinearQuantileRegression(BaseEstimator):
     def __init__(self, 
                  coverage = 0.05, 

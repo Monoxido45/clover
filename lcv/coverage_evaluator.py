@@ -13,7 +13,7 @@ from optuna.trial import TrialState
 import numpy as np
 from copy import deepcopy
 
-class Coverage_evaluator:
+class Coverage_evaluator(BaseEstimator):
     '''
     Neural Net Coverage Evaluator used as intermediary model in conditional coverage
     hypothesis testing. The learning rate, optimizers, number of hidden layers, 
