@@ -284,7 +284,7 @@ class Coverage_evaluator:
                     # number of hidden units for i-th layer
                     out_features = param_dict["n_units_l{}".format(i)]
                     layers.append(nn.Linear(in_features, out_features))
-                    layers.append(nn.ReLU())
+                    layers.append(nn.SELU())
                     p = param_dict["dropout_l{}".format(i)]
                     layers.append(nn.Dropout(p))
                     in_features = out_features
@@ -305,7 +305,7 @@ class Coverage_evaluator:
         return NNet(param_dict, x_dim)
     
     def reset_weights(self):
-        self.model.apply(model._initialize_layers)
+        self.model.apply(self.model._initialize_layers)
         return self
     
     # one epoch fitting
