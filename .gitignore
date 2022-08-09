@@ -1,2 +1,6 @@
  
 .Rproj.user
+build/*
+*.egg-info/
+lcv/__pycache__
+.Rhistory
