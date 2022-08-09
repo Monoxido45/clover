@@ -23,18 +23,19 @@ def unwrap_par_self(arg, **kwarg):
 class Valid_pred_sets(BaseEstimator):
     '''
     Validation of conditional coverage. Here we test $H0: P(Y  \in R(X)|X) = 1 - \alpha$
-    (This class is in Scikit-Learn style)
+    -----------
+    conf: model object
+      already calibrated Conformal Prediction model from noncoformist package or any model with predict method
+    alpha: float between 0 and 1
+      significance level for testing
+    coverage evaluator: string
+      which coverage evaluator to use: random forest (RF), neural networks (nnet), gam (GAM) and knn (KNN). If None, the classifier
+      is chosen according to a binary crossentropy value in a holdout validation set
     '''
     def __init__(self,
                  conf,
                  alpha,
                  coverage_evaluator = "RF"):
-        '''
-        Input:  (i)  conf: already calibrated Conformal prediction model from nonconformist package or any model with predict method
-                (ii) alpha: significance level for testing
-                (iii) Which coverage evalutor to use: random forest (RF) or neural networks (nnet)
-        '''
-        
         self.conf = conf
         self.alpha = alpha
         self.coverage_evaluator = coverage_evaluator
