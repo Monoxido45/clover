@@ -4,3 +4,4 @@ build/*
 *.egg-info/
 lcv/__pycache__
 .Rhistory
+results/__pycache__
