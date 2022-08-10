@@ -158,9 +158,9 @@ class Valid_pred_sets(BaseEstimator):
                 args = (self.coverage_evaluator, self.model, self.alpha, self.X_train, self.w_train, self.X_test, seed))
                 t_b.append(result)
 
+            t_b = np.array([result.get() for result in t_b])
             pool.close()
-
-            return np.array(t_b)
+            pool.join()
             
         # computing p-value from the proportion of generated t's larger than the observed t
         p_value = (t_b > t_obs).mean()
