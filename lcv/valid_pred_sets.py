@@ -13,7 +13,7 @@ from sklearn.linear_model import QuantileRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 
 # nnet coverage evaluator, gam model and pararelism library
-from coverage_evaluator import Coverage_evaluator
+from .coverage_evaluator import Coverage_evaluator
 from pygam import LogisticGAM
 from copy import deepcopy
 import multiprocessing as mp
@@ -159,7 +159,7 @@ class Valid_pred_sets(BaseEstimator):
                 t_b.append(result)
 
             pool.close()
-            
+
             return np.array(t_b)
             
         # computing p-value from the proportion of generated t's larger than the observed t
