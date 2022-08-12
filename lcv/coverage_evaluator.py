@@ -13,6 +13,8 @@ from optuna.trial import TrialState
 import numpy as np
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
+
 class Coverage_evaluator(BaseEstimator):
     '''
     Neural Net Coverage Evaluator used as intermediary model in conditional coverage
@@ -49,7 +51,7 @@ class Coverage_evaluator(BaseEstimator):
                 splitter_seed = 1250,
                 gpu = True,
                 scale_data = True):
-        
+        # TODO: Add controlable verbosity levels to optuna optimization and some verbose to nnet fit step
         for prop in dir():
             if prop != "self":
                 setattr(self, prop, locals()[prop])
@@ -78,16 +80,19 @@ class Coverage_evaluator(BaseEstimator):
         if not self.optimized:
             best_params = self.optimize()
             self.optimized = True
-            # optimized neural net constructor with uniform initiation
+            # optimized neural net constructor
             torch.manual_seed(self.seed)
-            self.model = self.construct_final_net(best_params, self.x_dim).to(DEVICE)
+            self.model = self._build_model(best_params, optimize = False).to(DEVICE)
+            # xavier normal initialization
+            self.model.apply(self.reset_weights)
         
             # best optimizer and learning rate
             opt = getattr(optim, best_params["optimizer"])
             lr = best_params["lr"]
             self.optimizer = opt(self.model.parameters(), lr = lr)
         else:
-            self.reset_weights()
+            # resetting weights using xavier normal
+            self.model.apply(self.reset_weights)
             
         return self.improve_fit(self.optimizer, self.nepoch)
     
@@ -121,24 +126,29 @@ class Coverage_evaluator(BaseEstimator):
         # initializing best loss and loss list
         self.best_val_loss = np.infty
         self.loss_history_validation = []
+        self.loss_history_train = []
+        self.epoch_list = []
         
         # for early stopping
         es_tries = 0
          
         # training and validating model
-        for epoch in range(self.nepoch):
+        for epoch in range(nepoch):
             # first training
             self.model.train()
-            self._one_epoch(True, self.batch_size, inputv_train, target_train, 
+            trainloss = self._one_epoch(True, self.batch_size, inputv_train, target_train, 
                             optimizer, loss_function)
-            
+            self.loss_history_train.append(trainloss)
+
             # Then validating
             self.model.eval()
             avloss = self._one_epoch(False, self.batch_test_size, 
                                      inputv_val, target_val, 
                                      optimizer, loss_function)
+
             self.loss_history_validation.append(avloss)
-            
+            self.epoch_list.append(epoch)
+
             if avloss <= self.best_val_loss:
                 self.best_val_loss = avloss
                 es_tries = 0
@@ -154,6 +164,17 @@ class Coverage_evaluator(BaseEstimator):
         
         return self
     
+    def plot_history(self):
+        plt.plot(self.epoch_list, self.loss_history_train, color = "tab:red")
+        plt.plot(self.epoch_list, self.loss_history_validation, color = "tab:blue")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+    
+    def return_history_dict(self):
+        return {"epoch" : self.epoch_list,
+        "train loss": self.loss_history_train,
+        "valid loss": self.loss_history_validation}
+    
     # optimizing by optuna study
     def optimize(self):
         # creating study object
@@ -168,25 +189,42 @@ class Coverage_evaluator(BaseEstimator):
         return best_params
     
     # optuna based function to build nnet
-    def _build_model(self, trial):
+    def _build_model(self, trial, optimize = True):
         # initiating model to optimize
         # optimizing number of layers
-        n_layers = trial.suggest_int("n_layers", 1, 4)
-        layers = []
-        in_features = self.x_dim
-        
-        for i in range(n_layers):
-            # optimizing number of hidden units
-            out_features = trial.suggest_int("n_units_l{}".format(i), 4, 128)
-            layers.append(nn.Linear(in_features, out_features))
-            layers.append(nn.ReLU())
-            # optimizing dropout ratio
-            p = trial.suggest_float("dropout_l{}".format(i), 0.2, 0.5)
-            layers.append(nn.Dropout(p))
-            in_features = out_features
+        if optimize:
+            n_layers = trial.suggest_int("n_layers", 1, 4)
+            layers = []
+            in_features = self.x_dim
             
+            for i in range(n_layers):
+                # optimizing number of hidden units
+                out_features = trial.suggest_int("n_units_l{}".format(i), 4, 128)
+                layers.append(nn.Linear(in_features, out_features))
+                layers.append(nn.ReLU())
+                # optimizing dropout ratio
+                p = trial.suggest_float("dropout_l{}".format(i), 0.2, 0.5)
+                layers.append(nn.Dropout(p))
+                in_features = out_features
+
+         # if already optimized, we set trial as param_dict       
+        else:
+            param_dict = trial
+            n_layers = param_dict["n_layers"]
+            layers = []
+            in_features = self.x_dim
+            for i in range(n_layers):
+                # number of hidden units for i-th layer
+                out_features = param_dict["n_units_l{}".format(i)]
+                layers.append(nn.Linear(in_features, out_features))
+                layers.append(nn.SELU())
+                p = param_dict["dropout_l{}".format(i)]
+                layers.append(nn.Dropout(p))
+                in_features = out_features
+                
         layers.append(nn.Linear(in_features, 1))
-        layers.append(nn.Sigmoid())  
+        layers.append(nn.Sigmoid()) 
+
         return nn.Sequential(*layers)
     
     # fitting neural net for optuna
@@ -201,7 +239,7 @@ class Coverage_evaluator(BaseEstimator):
         self.model = self._build_model(trial).to(DEVICE)
 
         # Generate the optimizers.
-        optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"])
+        optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD", "Adamax"])
         lr = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
         optimizer = getattr(optim, optimizer_name)(self.model.parameters(), lr=lr)
         
@@ -269,82 +307,47 @@ class Coverage_evaluator(BaseEstimator):
         
         return self.best_loss_history_validation
     
-    # final neural net constructor using optuna hyperparameter dict to construct neural net
-    def construct_final_net(self, param_dict, x_dim):
-        class NNet(nn.Module):
-            def __init__(self, param_dict, x_dim):
-                super(NNet, self).__init__()
-                # number of layers
-                self.x_dim = x_dim
-                n_layers = param_dict["n_layers"]
-                layers = []
-                in_features = self.x_dim
-        
-                for i in range(n_layers):
-                    # number of hidden units for i-th layer
-                    out_features = param_dict["n_units_l{}".format(i)]
-                    layers.append(nn.Linear(in_features, out_features))
-                    layers.append(nn.SELU())
-                    p = param_dict["dropout_l{}".format(i)]
-                    layers.append(nn.Dropout(p))
-                    in_features = out_features
-                
-                layers.append(nn.Linear(in_features, 1))
-                layers.append(nn.Sigmoid())  
-                self.main = nn.Sequential(*layers)
-                self.main.apply(self._initialize_layers)
-            
-            def forward(self, input):
-                return self.main(input)
-            
-            def _initialize_layers(self, m):
-                if type(m) == nn.Linear:
-                    nn.init.constant_(m.bias, 0)
-                    gain = nn.init.calculate_gain('relu')
-                    nn.init.xavier_normal_(m.weight, gain = gain)               
-        return NNet(param_dict, x_dim)
-    
-    def reset_weights(self):
-        self.model.apply(self.model._initialize_layers)
-        return self
+    def reset_weights(self, m):
+        if type(m) == nn.Linear:
+            nn.init.constant_(m.bias, 0)
+            gain = nn.init.calculate_gain('relu')
+            nn.init.xavier_normal_(m.weight, gain = gain)
     
     # one epoch fitting
     def _one_epoch(self, is_train, batch_size, inputv, target,
         optimizer, criterion):
-        
-        inputv = torch.from_numpy(inputv)
-        target = torch.from_numpy(target)
-        loss_vals = []
+        with torch.set_grad_enabled(is_train):
+            inputv = torch.from_numpy(inputv)
+            target = torch.from_numpy(target)
+            loss_vals = []
 
-        tdataset = data.TensorDataset(inputv, target)
-        data_loader = data.DataLoader(tdataset,
-        batch_size=batch_size, shuffle=True, drop_last=is_train,
-        pin_memory = self.gpu,
-        num_workers = self.dataloader_workers)
+            tdataset = data.TensorDataset(inputv, target)
+            data_loader = data.DataLoader(tdataset,
+            batch_size=batch_size, shuffle=True, drop_last=is_train,
+            pin_memory = self.gpu,
+            num_workers = self.dataloader_workers)
 
-        for inputv_this, target_this in data_loader:
-            if self.gpu:
-                inputv_this = inputv_this.cuda(non_blocking=True)
-                target_this = target_this.cuda(non_blocking=True)
+            for inputv_this, target_this in data_loader:
+                if self.gpu:
+                    inputv_this = inputv_this.cuda(non_blocking=True)
+                    target_this = target_this.cuda(non_blocking=True)
 
-            inputv_this.requires_grad_(True)
+                inputv_this.requires_grad_(True)
 
-            batch_actual_size = inputv_this.shape[0]
-
-            optimizer.zero_grad()
-            output = self.model(inputv_this)
+                optimizer.zero_grad()
+                output = self.model(inputv_this)
+                
+                loss = criterion(torch.reshape(output, (-1, )), target_this.float())
+                np_loss = loss.data.item()
+                loss_vals.append(np_loss)
+                
+                if is_train:
+                        loss.backward()
+                        optimizer.step()
             
-            loss = criterion(torch.reshape(output, (-1, )), target_this.float())
-            np_loss = loss.data.item()
-            loss_vals.append(np_loss)
+            avgloss = np.average(loss_vals)
             
-            if is_train:
-                    loss.backward()
-                    optimizer.step()
-        
-        avgloss = np.average(loss_vals)
-        
-        return avgloss
+            return avgloss
     
     def predict(self, x_pred):
         if self.scale_data:
