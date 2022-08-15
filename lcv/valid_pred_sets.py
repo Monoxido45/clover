@@ -43,6 +43,14 @@ def retrain_par(coverage_evaluator, model, X_train, new_w, X_test):
         new_r = model_temp.predict(X_test).flatten(order = "C")
         return new_r
 
+def bootstrap_par(B, alpha, coverage_evaluator, model, X_train, w_train, X_test, seed):
+    np.random.seed(seed)
+    new_indexes = np.random.randint(X_train.shape[0], size = B)
+    new_X_train, new_w_train = X_train[new_indexes, :], w_train[new_indexes]
+    new_r = retrain_par(coverage_evaluator, model, new_X_train, new_w_train, X_test)
+    t = np.mean(np.abs(new_r  - (1 - alpha)))
+    return t
+
 class Valid_pred_sets(BaseEstimator):
     '''
     Validation of conditional coverage. Here we test $H0: P(Y  \in R(X)|X) = 1 - \alpha$
@@ -165,6 +173,55 @@ class Valid_pred_sets(BaseEstimator):
         # computing p-value from the proportion of generated t's larger than the observed t
         p_value = (t_b > t_obs).mean()
         return {"p-value":p_value, "Observed statistic":t_obs}
+    
+    def bootstrap_ci(self, B =  1000, sig_b = 0.05, random_seed = 1250, par = False):
+        # computing original
+        r = self.predict(self.X_test)
+        t_obs = np.mean(np.abs(r  - (1 - self.alpha)))
+
+        # computing boostrap samples
+        np.random.seed(random_seed)
+        # generating statistic array by bootstrap
+        if not par:
+            t_vec = np.zeros(B)
+            for i in range(B):
+                new_indexes = np.random.randint(self.X_train.shape[0], size = B)
+                new_X_train, new_w_train = self.X_train[new_indexes, :], self.w_train[new_indexes]
+                new_r = self.retrain(new_X_train, new_w_train, self.X_test)
+                t_vec[i] = np.mean(np.abs(new_r  - (1 - self.alpha)))
+        else:
+            ctx = mp.get_context("spawn")
+            cpus = mp.cpu_count()
+            pool = ctx.Pool(cpus - 1)
+            seeds = np.random.randint(1e8, size = B)
+            t_vec = []
+            for seed in seeds:
+                result = pool.apply_async(bootstrap_par,
+                args = (B, self.alpha, self.coverage_evaluator, self.model, self.alpha, self.X_train, self.w_train, self.X_test, seed))
+                t_vec.append(result)
+
+            t_vec = np.array([result.get() for result in t_vec])
+            pool.close()
+            pool.join()
+
+        # finally obtaining bootstrap CI
+        epb = np.sqrt1(1/(B - 1) * np.sum((t_vec - np.mean(t_vec))**2))
+        se_int = np.array([t_obs - stats.norm.ppf(1 - sig_b/2)*epb, t_obs + stats.norm.ppf(1 - sig_b/2)*epb])
+        percent_int = np.array([np.quantile(t_vec, sig_b/2), np.quantile(t_vec, 1 - sig_b/2)])
+        int_boot = {"t_obs": t_obs,
+        "SE confidence interval":se_int,
+        "Percentile interval":percent_int}
+
+        return int_boot
+
+
+
+
+
+
+
+        
+
 
 # creating a adapter class to quantile regression in python which outputs a matrix of predictions
 class LinearQuantileRegression(BaseEstimator):
