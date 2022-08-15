@@ -50,7 +50,8 @@ class Coverage_evaluator(BaseEstimator):
                 dataloader_workers = 1,
                 splitter_seed = 1250,
                 gpu = True,
-                scale_data = True):
+                scale_data = True,
+                verbose_optim = 0):
         # TODO: Add controlable verbosity levels to optuna optimization and some verbose to nnet fit step
         for prop in dir():
             if prop != "self":
@@ -177,6 +178,11 @@ class Coverage_evaluator(BaseEstimator):
     
     # optimizing by optuna study
     def optimize(self):
+        # adjusting optuna verbosity level
+        if self.verbose_optim == 0:
+            optuna.looging.set_verbosity(optuna.logging.WARNING)
+        else:
+            optuna.looging.set_verbosity(optuna.logging.INFO)
         # creating study object
         study = optuna.create_study(sampler = optuna.samplers.RandomSampler(seed = self.seed),
                                     direction="minimize")

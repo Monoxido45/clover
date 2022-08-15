@@ -16,6 +16,7 @@ class simulation:
         X = np.random.uniform(low = -1.5, high = 1.5, size = (n, self.dim))
         y = np.random.normal(self.coef*X[:, 0], scale = 1, size = n)
         self.X, self.y = X, y
+        self.kind = "homoscedastic"
     
     def bimodal(self, n, random_seed = 1250):
         np.random.seed(random_seed)
@@ -26,12 +27,14 @@ class simulation:
         y = (0.5*np.random.normal(f_x - g_x, scale = sigma_x, size = n) + 
              0.5*np.random.normal(f_x + g_x, scale = sigma_x, size = n))
         self.X, self.y = X, y
+        self.kind = "bimodal"
     
     def heteroscedastic(self, n, random_seed = 1250):
         np.random.seed(random_seed)
         X = np.random.uniform(low = -1.5, high = 1.5, size = (n, self.dim))
         y = np.random.normal(self.coef*X[:, 0], scale = np.sqrt(1 + self.coef*np.abs(X[:, 0])), size = n)
         self.X, self.y = X, y
+        self.kind = "heteroscedastic"
     
     def homoscedastic_quantiles(self, X_grid, sig):
         q = [sig/2, 1 - sig/2]
@@ -62,4 +65,11 @@ class simulation:
                                            scale = np.sqrt(1 + self.coef*np.abs(X_grid[i])),
                                            size = B)
         return y_mat
+
+    def predict(self, X_pred, significance = 0.05):
+        quantile_kind = getattr(self, self.kind + "_quantiles")
+        return quantile_kind(X_pred[:, 0], sig = significance)
+    
+    def fit(self, X, y, significance = 0.05):
+        return self.predict(X, significance)
 
