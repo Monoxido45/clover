@@ -5,3 +5,4 @@ build/*
 lcv/__pycache__
 .Rhistory
 results/__pycache__
+results/figures
