@@ -205,7 +205,7 @@ class Valid_pred_sets(BaseEstimator):
             pool.join()
 
         # finally obtaining bootstrap CI
-        epb = np.sqrt1(1/(B - 1) * np.sum((t_vec - np.mean(t_vec))**2))
+        epb = np.sqrt(1/(B - 1) * np.sum((t_vec - np.mean(t_vec))**2))
         se_int = np.array([t_obs - stats.norm.ppf(1 - sig_b/2)*epb, t_obs + stats.norm.ppf(1 - sig_b/2)*epb])
         percent_int = np.array([np.quantile(t_vec, sig_b/2), np.quantile(t_vec, 1 - sig_b/2)])
         int_boot = {"t_obs": t_obs,
