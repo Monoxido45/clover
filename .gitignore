@@ -6,5 +6,4 @@ lcv/__pycache__
 .Rhistory
 results/__pycache__
 results/figures
-results/pickle_files
 results/.ipynb_checkpoints
