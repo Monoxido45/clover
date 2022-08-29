@@ -207,7 +207,7 @@ class Coverage_evaluator(BaseEstimator):
                 # optimizing number of hidden units
                 out_features = trial.suggest_int("n_units_l{}".format(i), 4, 128)
                 layers.append(nn.Linear(in_features, out_features))
-                layers.append(nn.ReLU())
+                layers.append(nn.SELU())
                 # optimizing dropout ratio
                 p = trial.suggest_float("dropout_l{}".format(i), 0.2, 0.5)
                 layers.append(nn.Dropout(p))
