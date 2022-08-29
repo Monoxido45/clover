@@ -22,8 +22,8 @@ class simulation:
         np.random.seed(random_seed)
         X = np.random.uniform(low = -1.5, high = 1.5, size = (n, self.dim))
         f_x = (X[:, 0] - 1)**(2)*(X[:, 0] + 1)
-        g_x = 2*int(X[:, 0] >= -0.5)*np.sqrt(X[:,0] + 0.5)
-        sigma_x = np.sqrt(0.25 + np.abs(X[:0]))
+        g_x = 2*np.sqrt((X[:, 0] >= -0.5)*(X[:,0] + 0.5))
+        sigma_x = np.sqrt(0.25 + np.abs(X[:,0]))
         y = (0.5*np.random.normal(f_x - g_x, scale = sigma_x, size = n) + 
              0.5*np.random.normal(f_x + g_x, scale = sigma_x, size = n))
         self.X, self.y = X, y
