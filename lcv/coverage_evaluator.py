@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils import data
+from torch.optim import Adamax as optimm
 
 from sklearn.model_selection import ShuffleSplit, train_test_split
 from sklearn.base import BaseEstimator
@@ -17,7 +18,7 @@ import matplotlib.pyplot as plt
 
 class Coverage_evaluator(BaseEstimator):
     '''
-    Neural Net Coverage Evaluator used as intermediary model in conditional coverage
+    Neural Network Coverage Evaluator used as intermediary model in conditional coverage
     hypothesis testing. The learning rate, optimizers, number of hidden layers, 
     number of hidden states and dropout ratios hyperparameters are all optimized.
     -----------
@@ -33,6 +34,10 @@ class Coverage_evaluator(BaseEstimator):
         Validation batch_size
     validation_split: float
         Proportion of data used for validation
+    nlayers: positive integer
+        Number of layers. Default is 3.
+    hidden_size: Positive Integer or List of integers or None
+        List of hidden unit  with length equal to nlayers. Default is 100 for each layer.
     splitter_seed: int
         Control the randomness of training/validation splitting
     gpu: bool
@@ -49,15 +54,29 @@ class Coverage_evaluator(BaseEstimator):
                 validation_split = 0.33,
                 dataloader_workers = 1,
                 splitter_seed = 1250,
+                nlayers = 3,
+                hidden_size = 100,
                 gpu = True,
                 scale_data = True,
+                optimized = False,
                 verbose_optim = 0):
-        # TODO: Add controlable verbosity levels to optuna optimization and some verbose to nnet fit step
         for prop in dir():
             if prop != "self":
                 setattr(self, prop, locals()[prop])
-        self.optimized = False
         self.gpu = gpu
+
+    
+    def move_to_gpu(self):
+        self.model.cuda()
+        self.gpu = True
+
+        return self
+
+    def move_to_cpu(self):
+        self.model.cpu()
+        self.gpu = False
+
+        return self
     
     # optimizing and fitting neural net
     def fit(self, X_train, y_train):
@@ -199,29 +218,28 @@ class Coverage_evaluator(BaseEstimator):
         # initiating model to optimize
         # optimizing number of layers
         if optimize:
-            n_layers = trial.suggest_int("n_layers", 1, 4)
+            n_layers = self.nlayers
             layers = []
             in_features = self.x_dim
             
             for i in range(n_layers):
                 # optimizing number of hidden units
-                out_features = trial.suggest_int("n_units_l{}".format(i), 4, 128)
+                out_features = self.hidden_size
                 layers.append(nn.Linear(in_features, out_features))
                 layers.append(nn.SELU())
                 # optimizing dropout ratio
-                p = trial.suggest_float("dropout_l{}".format(i), 0.2, 0.5)
+                p = trial.suggest_float("dropout_l{}".format(i), 0.2, 0.7)
                 layers.append(nn.Dropout(p))
                 in_features = out_features
 
          # if already optimized, we set trial as param_dict       
         else:
             param_dict = trial
-            n_layers = param_dict["n_layers"]
             layers = []
             in_features = self.x_dim
             for i in range(n_layers):
                 # number of hidden units for i-th layer
-                out_features = param_dict["n_units_l{}".format(i)]
+                out_features = self.hidden_size
                 layers.append(nn.Linear(in_features, out_features))
                 layers.append(nn.SELU())
                 p = param_dict["dropout_l{}".format(i)]
@@ -244,10 +262,9 @@ class Coverage_evaluator(BaseEstimator):
         # Generate the model
         self.model = self._build_model(trial).to(DEVICE)
 
-        # Generate the optimizers.
-        optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD", "Adamax"])
-        lr = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
-        optimizer = getattr(optim, optimizer_name)(self.model.parameters(), lr=lr)
+        # trying several values of learning rate
+        lr = trial.suggest_float("lr", 1e-5, 0.25, log=True)
+        optimizer = optimm(self.model.parameters(), lr=lr)
         
         # loss function of interest
         loss_function = nn.BCELoss()
@@ -337,6 +354,9 @@ class Coverage_evaluator(BaseEstimator):
                 if self.gpu:
                     inputv_this = inputv_this.cuda(non_blocking=True)
                     target_this = target_this.cuda(non_blocking=True)
+                else:
+                    inputv_this = inputv_this.cpu(non_blocking=True)
+                    target_this = target_this.cpu(non_blocking=True)
 
                 inputv_this.requires_grad_(True)
 

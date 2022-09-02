@@ -26,7 +26,7 @@ def _retrain_loop_par(coverage_evaluator, model, alpha, X_train, w_train, X_test
         return np.mean(np.abs(new_r - (1 - alpha)))
 
 def retrain_par(coverage_evaluator, model, X_train, new_w, X_test):
-    if coverage_evaluator == "RF":
+    if coverage_evaluator == "RF" or "sklearn" in str(type((model))):
         model_temp = clone(model).fit(X_train, new_w)
         pred = model_temp.predict_proba(X_test)
         if len(pred[0]) == 1:
@@ -39,7 +39,8 @@ def retrain_par(coverage_evaluator, model, X_train, new_w, X_test):
         new_r = model_temp.predict_proba(X_test)
         return new_r
     else:
-        model_temp = deepcopy(model).fit(X_train, new_w)
+        # using cpu instead of gpu
+        model_temp = deepcopy(model).move_to_cpu().fit(X_train, new_w)
         new_r = model_temp.predict(X_test).flatten(order = "C")
         return new_r
 
@@ -59,9 +60,9 @@ class Valid_pred_sets(BaseEstimator):
       already calibrated Conformal Prediction model from noncoformist package or any model with predict method
     alpha: float between 0 and 1
       significance level for testing
-    coverage evaluator: string
-      which coverage evaluator to use: random forest (RF), neural networks (nnet), gam (GAM) and knn (KNN). If None, the classifier
-      is chosen according to a binary crossentropy value in a holdout validation set
+    coverage evaluator: string or Sklearn model
+      which coverage evaluator to use: random forest (RF), neural networks (nnet), gam (GAM) or any sklearn model class.
+      If None, the classifier is chosen according to a binary crossentropy value in a holdout validation set
     '''
     def __init__(self,
                  conf,
@@ -87,18 +88,26 @@ class Valid_pred_sets(BaseEstimator):
         return self._init_coverage_evaluator(random_seed = random_seed, **kwargs)
     
     def _init_coverage_evaluator(self, random_seed, **kwargs):
+        '''
+        Coverage evaluator initializer
+        -----------
+        random_seed: Random seed provided
+        **kwargs: Arguments passed to it correspondent coverage evaluator model
+        '''
         if self.coverage_evaluator == "RF":
             self.model = RandomForestClassifier(**kwargs).fit(self.X_train, self.w_train)
         elif self.coverage_evaluator == "GAM":
             self.model = LogisticGAM().gridsearch(self.X_train, self.w_train).fit(self.X_train, self.w_train)
-        else:
-            # using pytorch coverage_evalutor class
+        elif self.coverage_evaluator == "nnet":
+            # using pytorch coverage_evaluator class
             self.model = Coverage_evaluator(seed = random_seed, **kwargs).fit(self.X_train, self.w_train)
+        else:
+            self.model = self.coverage_evaluator.set_params(**kwargs).fit(self.X_train, self.w_train)
         return self
     
     
     def predict(self, X_test):
-        if self.coverage_evaluator == "RF":
+        if self.coverage_evaluator == "RF" or "sklearn" in str(type((self.model))):
             pred = self.model.predict_proba(X_test)
             if len(pred[0]) == 1:
                 return pred
@@ -107,12 +116,12 @@ class Valid_pred_sets(BaseEstimator):
         elif self.coverage_evaluator == "GAM":
             pred = self.model.predict_proba(X_test)
             return pred
-        else:
+        elif self.coverage_evaluator == "nnet":
             pred = self.model.predict(X_test).flatten(order = "C")
             return pred
     
     def retrain(self, X_train, new_w, X_test):
-        if self.coverage_evaluator == "RF":
+        if self.coverage_evaluator == "RF" or "sklearn" in str(type((self.model))):
             model_temp = clone(self.model).fit(X_train, new_w)
             pred = model_temp.predict_proba(self.X_test)
             if len(pred[0]) == 1:
