@@ -7,6 +7,11 @@ import numpy as np
 import os
 from os import path
 import time
+# coverage evaluator models
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+
+
 # importing simulation
 path_original = os.getcwd()
 os.chdir(path_original + "/results")
@@ -69,8 +74,11 @@ ncalib = 750, par = True, type_reg = "gb_quantile", random_seed = 1250, sig = 0.
 
 # running the script
 if __name__ == '__main__':
+  print("Type in your valid coverage evaluator of choice: ")
+  ce = eval(input())
+  print("Starting experiment: ")
   start = time.time()
-  compute_power()
+  compute_power(coverage_evaluator = ce)
   end = time.time() - start
   print("Time Elapsed: ", end)
 
