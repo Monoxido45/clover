@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator
 
+# uniform binning
+import itertools as it
+
 import multiprocessing as mp
 
 
@@ -84,6 +87,52 @@ class LocartSplit(BaseEstimator):
 
         return self.cutoffs
     
+    # uniform binning methods
+    def uniform_binning(self, X_calib, y_calib):
+        # obtaining the residuals
+        res = self.nc_score.compute(X_calib, y_calib)
+        # generating uniform binning of the feature space based on the locart size
+        num_partitions = int(np.ceil(len(self.cutoffs)**(1/X_calib.shape[1])))
+
+        # partitioning each x using quantiles
+        alphas = np.arange(1, (num_partitions + 1))/num_partitions
+        quantiles = np.quantile(X_calib, q = alphas, axis = 0)
+        # increasing 0.5 in the maximum to avoid X's above the maximum in testing
+        quantiles[(num_partitions -1), :] = quantiles[(num_partitions -1), :] + 0.5
+
+        # splitting the quantile array into k num_partitions slices
+        q_split = np.split(quantiles.T, X_calib.shape[1], axis = 0)
+        q_split = [i.reshape(-1) for i in q_split]
+
+        # obtaining all possible iterations of quantiles and grouping them into rows
+        self.unif_intervals = np.array(np.meshgrid(*q_split)).T.reshape(-1, X_calib.shape[1])
+
+        # obtaining each partition index for calibration data
+        int_idx = np.zeros(X_calib.shape[0])
+        for i in range(X_calib.shape[0]):
+            int_idx[i] = np.where(np.all(X_calib[i, :] <= self.unif_intervals, axis = 1))[0][0] + 1
+        unique_int = np.unique(int_idx)
+
+        # after splitting, obtaining uniform cutoffs
+        self.unif_cutoffs = np.zeros(int(num_partitions))
+        for i in range(int(num_partitions)):
+            self.unif_cutoffs[i] = np.quantile(res[int_idx == unique_int[i]], q = 1 - self.alpha)
+        return self.unif_cutoffs
+    
+    def predict_coverage_uniform(self, X_test, y_test):
+        res = self.nc_score.compute(X_test, y_test)
+
+        int_idx = np.zeros(X_test.shape[0])
+        for i in range(X_test.shape[0]):
+            int_idx[i] = np.where(np.all(X_test[i, :] <= self.unif_intervals, axis = 1))[0][0] + 1
+        unique_int = np.unique(int_idx)
+        coverage = np.zeros(X_test.shape[0])
+
+        for i in range(X_test.shape[0]):
+            coverage[i] = np.mean(res[int_idx == int_idx[i]] <= self.unif_cutoffs[np.where(unique_int == int_idx[i])])
+        return coverage 
+
+    
     def plot_locart(self):
         if self.cart_type == "CART":
             plot_tree(self.cart, filled=True)
@@ -105,7 +154,12 @@ class LocartSplit(BaseEstimator):
             coverage = np.zeros(X_test.shape[0])
         for i in range(X_test.shape[0]):
             coverage[i] = np.mean(res[leafs_idx == leafs_idx[i]] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])])
-        return coverage       
+        return coverage 
+        
+
+    def predict_mean_coverage(self, X_test,  y_test):
+        coverage = self.predict_coverage(X_test, y_test)
+        return np.mean(np.abs(coverage - (1 - self.alpha)))    
 
     def predict(self, X):
         '''
