@@ -53,6 +53,6 @@ class QuantileScore(Scores):
     
     def compute(self, X_calib, y_calib):
         pred = self.base_model.predict(X_calib)
-        scores = np.column_stack((pred[0, :] - y_calib, y_calib - pred[1, :]))
+        scores = np.column_stack((pred[:, 0] - y_calib, y_calib - pred[:, 1]))
         res = np.max(scores, axis = 1)
         return res
