@@ -6,9 +6,11 @@ from scipy import stats
 
 # sklearn modules
 from sklearn.tree import DecisionTreeRegressor, plot_tree
+from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator
+from .scores import QuantileScore
 
 # uniform binning
 import itertools as it
@@ -64,18 +66,27 @@ class LocartSplit(BaseEstimator):
             Random seed for CART or RFCDE 
         '''
         res = self.nc_score.compute(X_calib, y_calib)
-        # splitting calibration data into a training half and a prediction half
-        if self.split_calib:
-            X_calib_train, X_calib_test, res_calib_train, res_calib_test = train_test_split(X_calib, res, test_size = 0.5,  random_state = random_seed)
-        else:
-            X_calib_train, X_calib_test, res_calib_train, res_calib_test = X_calib, X_calib, res, res
+        # splitting calibration data into a training half and a validation half to prune the tree
+        X_calib_train, X_calib_test, res_calib_train, res_calib_test = train_test_split(X_calib, res, test_size = 0.5,  random_state = random_seed)
 
         if self.cart_type == "CART":
-            # training decision tree
+            # declaring decision tree
             self.cart = DecisionTreeRegressor(random_state = random_seed,
-            min_samples_leaf = 100).set_params(**kwargs).fit(X_calib_train, res_calib_train)
-            # predicting leafs index
-            leafs_idx = self.cart.apply(X_calib_test)
+            min_samples_leaf = 100).set_params(**kwargs)
+            # obtaining optimum alpha to prune decision tree
+            optim_ccp = self.prune_tree(X_calib_train, X_calib_test, res_calib_train, res_calib_test, random_state = 1250)
+
+            # pruning decision tree
+            self.cart.set_params(ccp_alpha=optim_ccp)
+
+            # fitting and predicting leaf labels
+            if self.split_calib:
+                self.cart.train(X_calib_train)
+                leafs_idx = self.cart.apply(X_calib_test)
+            else:
+                self.cart.train(X_calib)
+                leafs_idx = self.cart.apply(X_calib)
+
             unique_leafs = np.unique(leafs_idx)
             n_leafs = unique_leafs.shape[0]
 
@@ -87,6 +98,25 @@ class LocartSplit(BaseEstimator):
 
         return self.cutoffs
     
+    def prune_tree(self, X_train, X_valid, res_train, res_valid, **kwargs):
+        prune_path = self.cost_complexity_pruning_path.fit(X_train, res_train)
+        ccp_alphas = prune_path.ccp_alphas
+        current_loss = 1000
+        # cross validation by data splitting to choose alphas
+        for ccp_alpha in ccp_alphas:
+            preds_ccp = DecisionTreeRegressor(min_samples_leaf = 100,  ccp_alpha=ccp_alpha, 
+            **kwargs).fit(X_train, res_train).predict(X_valid)
+            loss_ccp = mean_squared_error(res_valid, preds_ccp)
+            if loss_ccp < current_loss:
+                current_loss = loss_ccp
+                optim_ccp = ccp_alpha
+
+        return optim_ccp       
+
+        
+
+            
+
     # uniform binning methods
     def uniform_binning(self, X_calib, y_calib):
         # obtaining the residuals
@@ -155,7 +185,7 @@ class LocartSplit(BaseEstimator):
         for i in range(X_test.shape[0]):
             coverage[i] = np.mean(res[leafs_idx == leafs_idx[i]] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])])
         return coverage 
-        
+
 
     def predict_mean_coverage(self, X_test,  y_test):
         coverage = self.predict_coverage(X_test, y_test)
@@ -166,4 +196,29 @@ class LocartSplit(BaseEstimator):
         Predict $1 - \alpha$ non conformity score for each test sample using LocartSplit
         '''
 
+
+class QuantileSplit(BaseEstimator):
+    def __init__(self, base_model, alpha,**kwargs):
+        self.base_model = base_model
+        self.nc_score = QuantileScore(self.base_model, coverage = alpha, **kwargs)
+        self.alpha = alpha
+    
+    def fit(self, X_train, y_train):
+        self.nc_score.fit(X_train, y_train)
+        return self
+    
+    def calibrate(self, X_calib, y_calib):
+        res = self.nc_score.compute(X_calib, y_calib)
+        self.cutoff = np.quantile(res, q = 1 - self.alpha)
+        return None
+    
+    def predict(self, X_test):
+        quantiles = self.nc_score.base_model.predict(X_test)
+        pred = np.vstack((quantiles[:, 0] - self.cutoff, quantiles[:, 1] + self.cutoff)).T
+        return pred
+
+
+
+
+        
 
