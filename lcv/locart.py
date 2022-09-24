@@ -56,7 +56,7 @@ class LocartSplit(BaseEstimator):
         self.nc_score.fit(X, y)
         return self
     
-    def calib(self, X_calib, y_calib, random_seed = 1250, **kwargs):
+    def calib(self, X_calib, y_calib, random_seed = 1250, prune_tree = True, prune_seed = 780, **kwargs):
         '''
         Calibrate non conformity score using LocartSplit
         --------------------------------------------------------
@@ -64,6 +64,10 @@ class LocartSplit(BaseEstimator):
         y_calib: label for training samples
         random_seed: int
             Random seed for CART or RFCDE 
+        prune_tree: boolean
+            Wether the tree should be pruned or not.
+        prune_seed: int
+            If prune_tree = True, random seed for data splitting to prune    
         '''
         res = self.nc_score.compute(X_calib, y_calib)
         # splitting calibration data into a training half and a validation half to prune the tree
@@ -74,17 +78,19 @@ class LocartSplit(BaseEstimator):
             self.cart = DecisionTreeRegressor(random_state = random_seed,
             min_samples_leaf = 100).set_params(**kwargs)
             # obtaining optimum alpha to prune decision tree
-            optim_ccp = self.prune_tree(X_calib_train, X_calib_test, res_calib_train, res_calib_test, random_state = 1250)
-
-            # pruning decision tree
-            self.cart.set_params(ccp_alpha=optim_ccp)
+            if prune_tree:
+                X_train_prune, X_test_prune, res_train_prune, res_test_prune = train_test_split(X_calib, res, test_size = 0.5, 
+                random_state = prune_seed)
+                optim_ccp = self.prune_tree(X_train_prune, X_test_prune, res_train_prune, res_test_prune, random_state = 1250)
+                # pruning decision tree
+                self.cart.set_params(ccp_alpha=optim_ccp)
 
             # fitting and predicting leaf labels
             if self.split_calib:
-                self.cart.train(X_calib_train)
+                self.cart.fit(X_calib_train, res_calib_train)
                 leafs_idx = self.cart.apply(X_calib_test)
             else:
-                self.cart.train(X_calib)
+                self.cart.fit(X_calib, res)
                 leafs_idx = self.cart.apply(X_calib)
 
             unique_leafs = np.unique(leafs_idx)
@@ -92,14 +98,17 @@ class LocartSplit(BaseEstimator):
 
             self.cutoffs = np.zeros(n_leafs)
             for i in range(n_leafs):
-                self.cutoffs[i] = np.quantile(res_calib_test[leafs_idx == unique_leafs[i]], q = 1 - self.alpha)
+                if self.split_calib:
+                    self.cutoffs[i] = np.quantile(res_calib_test[leafs_idx == unique_leafs[i]], q = 1 - self.alpha)
+                else:
+                    self.cutoffs[i] = np.quantile(res[leafs_idx == unique_leafs[i]], q = 1 - self.alpha)
 
         # TODO: implement RFCDE version
 
         return self.cutoffs
     
     def prune_tree(self, X_train, X_valid, res_train, res_valid, **kwargs):
-        prune_path = self.cost_complexity_pruning_path.fit(X_train, res_train)
+        prune_path = self.cart.cost_complexity_pruning_path(X_train, res_train)
         ccp_alphas = prune_path.ccp_alphas
         current_loss = 1000
         # cross validation by data splitting to choose alphas
@@ -149,7 +158,7 @@ class LocartSplit(BaseEstimator):
             self.unif_cutoffs[i] = np.quantile(res[int_idx == unique_int[i]], q = 1 - self.alpha)
         return self.unif_cutoffs
     
-    def predict_coverage_uniform(self, X_test, y_test):
+    def predict_coverage_uniform(self, X_test, y_test, marginal = False):
         res = self.nc_score.compute(X_test, y_test)
 
         int_idx = np.zeros(X_test.shape[0])
@@ -158,9 +167,13 @@ class LocartSplit(BaseEstimator):
         unique_int = np.unique(int_idx)
         coverage = np.zeros(X_test.shape[0])
 
-        for i in range(X_test.shape[0]):
-            coverage[i] = np.mean(res[int_idx == int_idx[i]] <= self.unif_cutoffs[np.where(unique_int == int_idx[i])])
-        return coverage 
+        if not marginal:
+            for i in range(X_test.shape[0]):
+                coverage[i] = np.mean(res[int_idx == int_idx[i]] <= self.cutoffs[np.where(unique_int == int_idx[i])])
+        else:
+            for i in range(X_test.shape[0]):
+                coverage[i] = (res[i] <= self.cutoffs[np.where(unique_int == int_idx[i])])
+        return coverage
 
     
     def plot_locart(self):
@@ -170,7 +183,7 @@ class LocartSplit(BaseEstimator):
             plt.show()
 
 
-    def predict_coverage(self, X_test, y_test):
+    def predict_coverage(self, X_test, y_test, marginal = False):
         '''
         Predict local coverage for each X acording to partitions obtained in LOCART
         --------------------------------------------------------
@@ -181,9 +194,14 @@ class LocartSplit(BaseEstimator):
         if self.cart_type == "CART":
             leafs_idx = self.cart.apply(X_test)
             unique_leafs = np.unique(leafs_idx)
+        if not marginal:
             coverage = np.zeros(X_test.shape[0])
-        for i in range(X_test.shape[0]):
-            coverage[i] = np.mean(res[leafs_idx == leafs_idx[i]] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])])
+            for i in range(X_test.shape[0]):
+                coverage[i] = np.mean(res[leafs_idx == leafs_idx[i]] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])])
+        else:
+            coverage  = np.zeros(X_test.shape[0])
+            for i in range(X_test.shape[0]):
+                coverage[i] = res[i] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])]
         return coverage 
 
 
@@ -193,8 +211,9 @@ class LocartSplit(BaseEstimator):
 
     def predict(self, X):
         '''
-        Predict $1 - \alpha$ non conformity score for each test sample using LocartSplit
+        Predict $1 - \alpha$ prediction region for each test sample using LocartSplit local cutoff points
         '''
+        
 
 
 class QuantileSplit(BaseEstimator):
