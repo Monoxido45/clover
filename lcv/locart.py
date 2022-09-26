@@ -53,8 +53,16 @@ class LocartSplit(BaseEstimator):
         X: Feature matrix
         y: label for training samples
         '''
+        # saving minimum and maximum for y
+        self.min_y, self.max_y = (np.min(y) - 1), (np.max(y) + 1)
         self.nc_score.fit(X, y)
         return self
+    
+    def update_limits(self, value_min, value_max):
+        if value_min < self.min_y:
+            self.min_y = value_min
+        if value_max > self.max_y:
+            self.max_y = value_max
     
     def calib(self, X_calib, y_calib, random_seed = 1250, prune_tree = True, prune_seed = 780, **kwargs):
         '''
@@ -70,6 +78,9 @@ class LocartSplit(BaseEstimator):
             If prune_tree = True, random seed for data splitting to prune    
         '''
         res = self.nc_score.compute(X_calib, y_calib)
+        # update min and maximum in y
+        self.update_limits(np.min(y_calib), np.max(y_calib))
+
         # splitting calibration data into a training half and a validation half to prune the tree
         X_calib_train, X_calib_test, res_calib_train, res_calib_test = train_test_split(X_calib, res, test_size = 0.5,  random_state = random_seed)
 
@@ -93,15 +104,15 @@ class LocartSplit(BaseEstimator):
                 self.cart.fit(X_calib, res)
                 leafs_idx = self.cart.apply(X_calib)
 
-            unique_leafs = np.unique(leafs_idx)
-            n_leafs = unique_leafs.shape[0]
+            self.leaf_idx = np.unique(leafs_idx)
+            n_leafs = self.leaf_idx.shape[0]
 
             self.cutoffs = np.zeros(n_leafs)
             for i in range(n_leafs):
                 if self.split_calib:
-                    self.cutoffs[i] = np.quantile(res_calib_test[leafs_idx == unique_leafs[i]], q = 1 - self.alpha)
+                    self.cutoffs[i] = np.quantile(res_calib_test[leafs_idx == self.leaf_idx[i]], q = 1 - self.alpha)
                 else:
-                    self.cutoffs[i] = np.quantile(res[leafs_idx == unique_leafs[i]], q = 1 - self.alpha)
+                    self.cutoffs[i] = np.quantile(res[leafs_idx == self.leaf_idx[i]], q = 1 - self.alpha)
 
         # TODO: implement RFCDE version
 
@@ -121,10 +132,6 @@ class LocartSplit(BaseEstimator):
                 optim_ccp = ccp_alpha
 
         return optim_ccp       
-
-        
-
-            
 
     # uniform binning methods
     def uniform_binning(self, X_calib, y_calib):
@@ -147,16 +154,20 @@ class LocartSplit(BaseEstimator):
         self.unif_intervals = np.array(np.meshgrid(*q_split)).T.reshape(-1, X_calib.shape[1])
 
         # obtaining each partition index for calibration data
-        int_idx = np.zeros(X_calib.shape[0])
-        for i in range(X_calib.shape[0]):
-            int_idx[i] = np.where(np.all(X_calib[i, :] <= self.unif_intervals, axis = 1))[0][0] + 1
-        unique_int = np.unique(int_idx)
+        int_idx = self.uniform_apply(X_calib)
+        self.cartesian_ints = np.unique(int_idx)
 
         # after splitting, obtaining uniform cutoffs
         self.unif_cutoffs = np.zeros(int(num_partitions))
         for i in range(int(num_partitions)):
-            self.unif_cutoffs[i] = np.quantile(res[int_idx == unique_int[i]], q = 1 - self.alpha)
+            self.unif_cutoffs[i] = np.quantile(res[int_idx == self.cartesian_ints[i]], q = 1 - self.alpha)
         return self.unif_cutoffs
+    
+    def uniform_apply(self, X):
+        int_idx = np.zeros(X.shape[0])
+        for i in range(X.shape[0]):
+            int_idx[i] = np.where(np.all(X[i, :] <= self.unif_intervals, axis = 1))[0][0] + 1
+        return(int_idx)
     
     def predict_coverage_uniform(self, X_test, y_test, marginal = False):
         res = self.nc_score.compute(X_test, y_test)
@@ -188,7 +199,7 @@ class LocartSplit(BaseEstimator):
         Predict local coverage for each X acording to partitions obtained in LOCART
         --------------------------------------------------------
         X_test: feature matrix
-        y_test: label for test samples
+        y_test: test samples labels
         '''
         res = self.nc_score.compute(X_test, y_test)
         if self.cart_type == "CART":
@@ -201,19 +212,64 @@ class LocartSplit(BaseEstimator):
         else:
             coverage  = np.zeros(X_test.shape[0])
             for i in range(X_test.shape[0]):
-                coverage[i] = res[i] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])]
+                coverage[i] = (res[i] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])]) + 0
         return coverage 
 
 
-    def predict_mean_coverage(self, X_test,  y_test):
+    def predict_mean_distance(self, X_test,  y_test):
         coverage = self.predict_coverage(X_test, y_test)
         return np.mean(np.abs(coverage - (1 - self.alpha)))    
 
-    def predict(self, X):
+    def predict(self, X, length = 1000, type_model = "CART"):
         '''
         Predict $1 - \alpha$ prediction region for each test sample using LocartSplit local cutoff points
         '''
-        
+        y_grid = np.linspace(self.min_y, self.max_y, length)
+        intervals_list = []
+        for i in range(X.shape[0]):
+            # computing residual for all the grid
+            res = self.nc_score.compute(X[i, :].reshape(1, -1), y_grid)
+            # obtaining cutoff indexes and cutoff points according to choosed type of model
+            if type_model == "CART":
+                cutoff_idx = np.where(self.leaf_idx == self.cart.apply(X[i, :].reshape(1, -1)))[0][0]
+                # finding interval/region limits
+                ident_int = np.diff((res <= self.cutoffs[cutoff_idx]) + 0)
+                ident_idx = np.where(ident_int != 0)[0]
+
+                # -1 indicates end of the invervals and 1 the beggining
+                # if we start the identifier with -1, that means the first entry is the beggining
+                if ident_int[ident_idx[0]] == -1:
+                    ident_idx = np.insert(ident_idx, 0, -1)
+                # if we finish with 0, that means the last entry is the end
+                if ident_int[ident_idx[-1]] == 1:
+                    ident_idx = np.append(ident_idx, y_grid.shape[0] - 1)
+
+                # after turning the array even shaped we add one to the lower limit of intervals
+                int_idx = ident_idx + np.tile(np.array([1, 0]), int(ident_idx.shape[0]/2))
+                intervals_list.append(y_grid[int_idx])
+            elif type_model == "euclidean":
+                # obtaining X cutoff index
+                cutoff_idx = np.where(self.leaf_idx == self.uniform_apply(X[i, :].reshape(1, -1)))[0][0]
+                # finding interval/region limits
+                ident_int = np.diff((res <= self.unif_cutoffs[cutoff_idx]) + 0)
+                ident_idx = np.where(ident_int != 0)[0]
+
+                # -1 indicates end of the invervals and 1 the beggining
+                # if we start the identifier with -1, that means the first entry is the beggining
+                if ident_int[ident_idx[0]] == -1:
+                    ident_idx = np.insert(ident_idx, 0, -1)
+                # if we finish with 1, that means the last entry is the end
+                if ident_int[ident_idx[-1]] == 1:
+                    ident_idx = np.append(ident_idx, y_grid.shape[0] - 1)
+
+                # after turning the array even shaped we add one to the lower limit of intervals
+                int_idx = ident_idx + np.tile(np.array([1, 0]), int(ident_idx.shape[0]/2))
+                intervals_list.append([y_grid[int_idx]])
+        return intervals_list
+
+
+
+
 
 
 class QuantileSplit(BaseEstimator):
