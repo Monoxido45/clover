@@ -10,7 +10,7 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator
-from .scores import QuantileScore
+from .scores import QuantileScore, LocalRegressionScore
 
 # uniform binning
 import itertools as it
@@ -81,7 +81,7 @@ class LocartSplit(BaseEstimator):
         # update min and maximum in y
         self.update_limits(np.min(y_calib), np.max(y_calib))
 
-        # splitting calibration data into a training half and a validation half to prune the tree
+        # splitting calibration data into a training half and a validation half
         X_calib_train, X_calib_test, res_calib_train, res_calib_test = train_test_split(X_calib, res, test_size = 0.5,  random_state = random_seed)
 
         if self.cart_type == "CART":
@@ -138,7 +138,7 @@ class LocartSplit(BaseEstimator):
         # obtaining the residuals
         res = self.nc_score.compute(X_calib, y_calib)
         # generating uniform binning of the feature space based on the locart size
-        num_partitions = int(np.ceil(len(self.cutoffs)**(1/X_calib.shape[1])))
+        num_partitions = int(np.floor(len(self.cutoffs)**(1/X_calib.shape[1])))
 
         # partitioning each x using quantiles
         alphas = np.arange(1, (num_partitions + 1))/num_partitions
@@ -249,7 +249,7 @@ class LocartSplit(BaseEstimator):
                 intervals_list.append(y_grid[int_idx])
             elif type_model == "euclidean":
                 # obtaining X cutoff index
-                cutoff_idx = np.where(self.leaf_idx == self.uniform_apply(X[i, :].reshape(1, -1)))[0][0]
+                cutoff_idx = np.where(self.cartesian_ints == self.uniform_apply(X[i, :].reshape(1, -1)))[0][0]
                 # finding interval/region limits
                 ident_int = np.diff((res <= self.unif_cutoffs[cutoff_idx]) + 0)
                 ident_idx = np.where(ident_int != 0)[0]
@@ -264,11 +264,8 @@ class LocartSplit(BaseEstimator):
 
                 # after turning the array even shaped we add one to the lower limit of intervals
                 int_idx = ident_idx + np.tile(np.array([1, 0]), int(ident_idx.shape[0]/2))
-                intervals_list.append([y_grid[int_idx]])
+                intervals_list.append(y_grid[int_idx])
         return intervals_list
-
-
-
 
 
 
@@ -293,7 +290,27 @@ class QuantileSplit(BaseEstimator):
         return pred
 
 
+# Local regression split proposed by Lei et al
+class LocalRegressionSplit(BaseEstimator):
 
-
-        
+    def __init__(self, base_model, alpha,**kwargs):
+        self.base_model = base_model
+        self.nc_score = LocalRegressionScore(self.base_model, **kwargs)
+        self.alpha = alpha
+    
+    def fit(self, X_train, y_train):
+        # fitting the weighted 
+        self.nc_score.fit(X_train, y_train)
+        return self
+    
+    def calibrate(self, X_calib, y_calib):
+        res = self.nc_score.compute(X_calib, y_calib)
+        self.cutoff = np.quantile(res, q = 1 - self.alpha)
+        return None
+    
+    def predict(self, X_test):
+        pred_mu = self.nc_score.base_model.predict(X_test)
+        pred_mad = self.nc_score.mad_model.predict(X_test)
+        pred = np.vstack((pred_mu - (pred_mad*self.cutoff), pred_mu + (pred_mad*self.cutoff))).T
+        return pred
 
