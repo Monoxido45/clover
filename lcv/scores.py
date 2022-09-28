@@ -55,8 +55,8 @@ class LocalRegressionScore(Scores):
         # splitting calibration set into two equal sized sets, one for training mad estimator, the other to compute residuals
         X_res, X_mad, y_res, y_mad = train_test_split(X_calib, y_calib, test_size = 0.5, random_state = random_state)
 
-        res = np.abs(y_mad - self.base_model.predict(X_mad))
-        self.mad_model = clone(self.base_model).fit(X_mad, res)
+        res_model = np.abs(y_mad - self.base_model.predict(X_mad))
+        self.mad_model = clone(self.base_model).fit(X_mad, res_model)
 
         pred_reg = self.base_model.predict(X_res)
         pred_mad = self.mad_model.predict(X_res)

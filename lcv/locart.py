@@ -299,7 +299,7 @@ class LocalRegressionSplit(BaseEstimator):
         self.alpha = alpha
     
     def fit(self, X_train, y_train):
-        # fitting the weighted 
+        # fitting the base model
         self.nc_score.fit(X_train, y_train)
         return self
     
