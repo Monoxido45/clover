@@ -172,18 +172,16 @@ class LocartSplit(BaseEstimator):
     def predict_coverage_uniform(self, X_test, y_test, marginal = False):
         res = self.nc_score.compute(X_test, y_test)
 
-        int_idx = np.zeros(X_test.shape[0])
-        for i in range(X_test.shape[0]):
-            int_idx[i] = np.where(np.all(X_test[i, :] <= self.unif_intervals, axis = 1))[0][0] + 1
+        int_idx = self.uniform_apply(X_test)
         unique_int = np.unique(int_idx)
         coverage = np.zeros(X_test.shape[0])
 
         if not marginal:
             for i in range(X_test.shape[0]):
-                coverage[i] = np.mean(res[int_idx == int_idx[i]] <= self.cutoffs[np.where(unique_int == int_idx[i])])
+                coverage[i] = np.mean(res[int_idx == int_idx[i]] <= self.unif_cutoffs[np.where(unique_int == int_idx[i])])
         else:
             for i in range(X_test.shape[0]):
-                coverage[i] = (res[i] <= self.cutoffs[np.where(unique_int == int_idx[i])])
+                coverage[i] = (res[i] <= self.unif_cutoffs[np.where(unique_int == int_idx[i])])
         return coverage
 
     
