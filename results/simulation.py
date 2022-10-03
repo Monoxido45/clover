@@ -18,11 +18,12 @@ def split(X, y, test_size = 0.4, calibrate = True, random_seed = 1250):
                 "y_train" : y_train,"y_test": y_test}
 
 class simulation:
-    def __init__(self, dim = 20, coef = 0.3, hetero_value = 1, asym_value = 0.6):
+    def __init__(self, dim = 20, coef = 0.3, hetero_value = 1, asym_value = 0.6, t_degree = 4):
         self.dim = dim
         self.coef = coef
         self.hetero_value = hetero_value
         self.asym_value = asym_value
+        self.t_degree = t_degree
     
     def change_dim(self, new_dim):
         self.dim = new_dim
@@ -34,6 +35,13 @@ class simulation:
         y = np.random.normal(self.coef*X[:, 0], scale = 1, size = n)
         self.X, self.y = X, y
         self.kind = "homoscedastic"
+
+    def t_residuals(self, n, random_seed = 1250):
+        np.random.seed(random_seed)
+        X = np.random.uniform(low = -1.5, high = 1.5, size = (n, self.dim))
+        y = (self.coef*X[:, 0]) + np.random.standard_t(self.t_degree, size = n)
+        self.X, self.y = X, y
+        self.kind = "t_residuals"
     
     def bimodal(self, n, random_seed = 1250):
         np.random.seed(random_seed)
@@ -59,6 +67,10 @@ class simulation:
     
     def set_asym_coef(self, value):
         self.asym_value = value
+
+    def set_t_degree(self, value):
+        self.t_degree = value
+
 
     def heteroscedastic(self, n, random_seed = 1250):
         np.random.seed(random_seed)
@@ -102,6 +114,12 @@ class simulation:
         for i in range(X_grid.shape[0]):
             y_mat[i, :] = (self.coef*X_grid[i]) + np.random.gamma(1 + 
             (self.asym_value*np.abs(X_grid[i])), 1 + (self.asym_value*np.abs(X_grid[i])), size = B)
+        return y_mat
+    
+    def t_residuals_r(self, X_grid, B = 1000):
+        y_mat = np.zeros((X_grid.shape[0], B))
+        for i in range(X_grid.shape[0]):
+            y_mat[i, :] = (self.coef*X_grid[i]) + np.random.standard_t(self.t_degree, size = B)
         return y_mat
 
     def predict(self, X_pred, significance = 0.05):
