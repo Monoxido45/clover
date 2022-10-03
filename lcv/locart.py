@@ -9,13 +9,9 @@ from sklearn.tree import DecisionTreeRegressor, plot_tree
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, clone
 from .scores import QuantileScore, LocalRegressionScore
 
-# uniform binning
-import itertools as it
-
-import multiprocessing as mp
 
 
 class LocartSplit(BaseEstimator):
@@ -87,12 +83,12 @@ class LocartSplit(BaseEstimator):
         if self.cart_type == "CART":
             # declaring decision tree
             self.cart = DecisionTreeRegressor(random_state = random_seed,
-            min_samples_leaf = 100).set_params(**kwargs)
+            min_samples_leaf = 300).set_params(**kwargs)
             # obtaining optimum alpha to prune decision tree
             if prune_tree:
-                X_train_prune, X_test_prune, res_train_prune, res_test_prune = train_test_split(X_calib, res, test_size = 0.5, 
+                X_train_prune, X_test_prune, res_train_prune, res_test_prune = train_test_split(X_calib_train, res_calib_train, test_size = 0.5, 
                 random_state = prune_seed)
-                optim_ccp = self.prune_tree(X_train_prune, X_test_prune, res_train_prune, res_test_prune, random_state = 1250)
+                optim_ccp = self.prune_tree(X_train_prune, X_test_prune, res_train_prune, res_test_prune)
                 # pruning decision tree
                 self.cart.set_params(ccp_alpha=optim_ccp)
 
@@ -118,14 +114,13 @@ class LocartSplit(BaseEstimator):
 
         return self.cutoffs
     
-    def prune_tree(self, X_train, X_valid, res_train, res_valid, **kwargs):
+    def prune_tree(self, X_train, X_valid, res_train, res_valid):
         prune_path = self.cart.cost_complexity_pruning_path(X_train, res_train)
         ccp_alphas = prune_path.ccp_alphas
         current_loss = 1000
         # cross validation by data splitting to choose alphas
         for ccp_alpha in ccp_alphas:
-            preds_ccp = DecisionTreeRegressor(min_samples_leaf = 100,  ccp_alpha=ccp_alpha, 
-            **kwargs).fit(X_train, res_train).predict(X_valid)
+            preds_ccp = clone(self.cart).set_params(ccp_alpha=ccp_alpha).fit(X_train, res_train).predict(X_valid)
             loss_ccp = mean_squared_error(res_valid, preds_ccp)
             if loss_ccp < current_loss:
                 current_loss = loss_ccp
