@@ -50,7 +50,7 @@ class LocartSplit(BaseEstimator):
         y: label for training samples
         '''
         # saving minimum and maximum for y
-        self.min_y, self.max_y = (np.min(y) - 1), (np.max(y) + 1)
+        self.min_y, self.max_y = (np.min(y) - 3), (np.max(y) + 3)
         self.nc_score.fit(X, y)
         return self
     
@@ -213,7 +213,7 @@ class LocartSplit(BaseEstimator):
         coverage = self.predict_coverage(X_test, y_test)
         return np.mean(np.abs(coverage - (1 - self.alpha)))    
 
-    def predict(self, X, length = 1000, type_model = "CART"):
+    def predict(self, X, length = 1500, type_model = "CART"):
         '''
         Predict $1 - \alpha$ prediction region for each test sample using LocartSplit local cutoff points
         '''
