@@ -163,55 +163,13 @@ class LocartSplit(BaseEstimator):
         for i in range(X.shape[0]):
             int_idx[i] = np.where(np.all(X[i, :] <= self.unif_intervals, axis = 1))[0][0] + 1
         return(int_idx)
-    
-    def predict_coverage_uniform(self, X_test, y_test, marginal = False):
-        res = self.nc_score.compute(X_test, y_test)
-
-        int_idx = self.uniform_apply(X_test)
-        unique_int = np.unique(int_idx)
-        coverage = np.zeros(X_test.shape[0])
-
-        if not marginal:
-            for i in range(X_test.shape[0]):
-                coverage[i] = np.mean(res[int_idx == int_idx[i]] <= self.unif_cutoffs[np.where(unique_int == int_idx[i])])
-        else:
-            for i in range(X_test.shape[0]):
-                coverage[i] = (res[i] <= self.unif_cutoffs[np.where(unique_int == int_idx[i])])
-        return coverage
 
     
     def plot_locart(self):
         if self.cart_type == "CART":
             plot_tree(self.cart, filled=True)
             plt.title("Decision Tree fitted to non-conformity score")
-            plt.show()
-
-
-    def predict_coverage(self, X_test, y_test, marginal = False):
-        '''
-        Predict local coverage for each X acording to partitions obtained in LOCART
-        --------------------------------------------------------
-        X_test: feature matrix
-        y_test: test samples labels
-        '''
-        res = self.nc_score.compute(X_test, y_test)
-        if self.cart_type == "CART":
-            leafs_idx = self.cart.apply(X_test)
-            unique_leafs = np.unique(leafs_idx)
-        if not marginal:
-            coverage = np.zeros(X_test.shape[0])
-            for i in range(X_test.shape[0]):
-                coverage[i] = np.mean(res[leafs_idx == leafs_idx[i]] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])])
-        else:
-            coverage  = np.zeros(X_test.shape[0])
-            for i in range(X_test.shape[0]):
-                coverage[i] = (res[i] <= self.cutoffs[np.where(unique_leafs == leafs_idx[i])]) + 0
-        return coverage 
-
-
-    def predict_mean_distance(self, X_test,  y_test):
-        coverage = self.predict_coverage(X_test, y_test)
-        return np.mean(np.abs(coverage - (1 - self.alpha)))    
+            plt.show() 
 
     def predict(self, X, length = 1500, type_model = "CART"):
         '''
