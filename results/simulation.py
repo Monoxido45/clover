@@ -79,6 +79,13 @@ class simulation:
         self.X, self.y = X, y
         self.kind = "heteroscedastic"
     
+    def non_cor_heteroscedastic(self, n, random_seed = 1250):
+        np.random.seed(random_seed)
+        X = np.random.uniform(low = -1.5, high = 1.5, size = (n, self.dim))
+        y = np.random.normal(1, scale = np.sqrt(self.hetero_value + self.coef*np.abs(X[:, 0])), size = n)
+        self.X, self.y = X, y
+        self.kind = "non_cor_heteroscedastic"
+    
     def homoscedastic_quantiles(self, X_grid, sig):
         q = [sig/2, 1 - sig/2]
         lower = stats.norm.ppf(np.repeat(q[0], X_grid.shape[0]), loc = self.coef*X_grid, scale = 1)
@@ -105,6 +112,14 @@ class simulation:
         y_mat = np.zeros((X_grid.shape[0], B))
         for i in range(X_grid.shape[0]):
             y_mat[i, :] = np.random.normal(self.coef*X_grid[i],
+                                           scale = np.sqrt(self.hetero_value + self.coef*np.abs(X_grid[i])),
+                                           size = B)
+        return y_mat
+    
+    def non_cor_heteroscedastic_r(self, X_grid, B = 1000):
+        y_mat = np.zeros((X_grid.shape[0], B))
+        for i in range(X_grid.shape[0]):
+            y_mat[i, :] = np.random.normal(1,
                                            scale = np.sqrt(self.hetero_value + self.coef*np.abs(X_grid[i])),
                                            size = B)
         return y_mat
