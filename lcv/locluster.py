@@ -89,25 +89,27 @@ class KmeansSplit(BaseEstimator):
             # obtaining scaled new X
             self.scaler = StandardScaler()
             new_X = self.scaler.fit_transform(self.qmodel.predict(X_calib_train))
+            
+            # predicting gbqr constructing test set to train k-means
+            new_X_test = self.scaler.transform(self.qmodel.predict(X_calib_test))
 
             # obtaining best k-means model according to silhouette score
             current_sil = -1
             if tune_k and prop_k.shape[0] > 1:
                 for k in prop_k:
-                    labels = KMeans(n_clusters = k, random_state = random_seed, n_init = 30).fit(new_X).labels_
+                    labels = KMeans(n_clusters = k, random_state = random_seed, n_init = 30).fit(new_X_test).labels_
                     new_sil = silhouette_score(new_X, labels, metric = "euclidean")
                     if new_sil > current_sil:
                         current_sil = new_sil
                         current_k = k
-                        
-                self.kmeans = KMeans(n_clusters = current_k, random_state = random_seed, n_init = 30).fit(new_X)
+                
+                # fitting
+                self.kmeans = KMeans(n_clusters = current_k, random_state = random_seed, n_init = 30).fit(new_X_test)
             else:
-                self.kmeans = KMeans(n_clusters = prop_k, random_state = random_seed, n_init = 30).fit(new_X)
+                self.kmeans = KMeans(n_clusters = prop_k, random_state = random_seed, n_init = 30).fit(new_X_test)
 
 
             # prediciting groups in the test set
-            # constructing test set
-            new_X_test = self.scaler.transform(self.qmodel.predict(X_calib_test))
             groups = self.apply(new_X_test)
             self.groups_idx = np.unique(groups)
             n_groups = self.groups_idx.shape[0]
@@ -133,6 +135,7 @@ class KmeansSplit(BaseEstimator):
             # computing residual for all the grid
             res = self.nc_score.compute(X[i, :].reshape(1, -1), y_grid)
             # obtaining cutoff indexes and cutoff points according to choosed type of model
+            print(self.apply(new_X[i, :].reshape(1, -1)))
 
             cutoff_idx = np.where(self.groups_idx == self.apply(new_X[i, :].reshape(1, -1)))[0][0]
 

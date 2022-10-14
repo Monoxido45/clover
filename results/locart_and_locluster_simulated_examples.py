@@ -1,11 +1,13 @@
 # importing all needed packages
 # models being used
-from lcv.locart import LocartSplit
+from lcv.locart import LocartSplit, LocalRegressionSplit
+from lcv.locluster import KmeansSplit
 from nonconformist.cp import IcpRegressor
 from nonconformist.nc import NcFactory
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from lcv.scores import RegressionScore
+import numpy as np
 
 # miscellanous
 import os
@@ -13,13 +15,12 @@ from os import path
 import time
 
 # importing simulation
-path_original = os.getcwd()
-os.chdir(path_original + "/results")
+original_path = os.getcwd()
+os.chdir(original_path + "/results")
 from simulation import simulation
 
 # returning to original path
-original_path = os.chdir(path_original)
-
+os.chdir(original_path)
 
 # methods to compute coverage and interval length
 def real_coverage(model_preds, y_mat):
@@ -30,6 +31,19 @@ def real_coverage(model_preds, y_mat):
 
 def compute_interval_length(predictions):
     return(predictions[:, 1] - predictions[:, 0])
+  
+# split function
+def split(X, y, test_size = 0.4, calibrate = True, random_seed = 1250):
+    X_train, X_test, y_train, y_test = train_test_split(X, y,test_size = test_size,
+                                                        random_state = random_seed)
+    if calibrate:
+        X_train, X_calib, y_train, y_calib = train_test_split(X_train, y_train, test_size = 0.3,
+                                                             random_state = random_seed)
+        return {"X_train":X_train, "X_calib": X_calib, "X_test" : X_test, 
+                "y_train" : y_train, "y_calib" : y_calib, "y_test": y_test}
+    else:
+        return{"X_train":X_train,"X_test" : X_test, 
+                "y_train" : y_train,"y_test": y_test}
   
   
 def compute_conformal_statistics(kind = "homoscedastic",
@@ -69,15 +83,16 @@ def compute_conformal_statistics(kind = "homoscedastic",
     # creating paths
     if "_V2" in kind:
       eta = 1.5
-      kind = asymmetric
-      folder_path = "results/pickle_files/locart_experiments_results/{}_data_eta_{}".format(
+      kind = "asymmetric"
+      folder_path = "/results/pickle_files/locart_experiments_results/{}_data_eta_{}".format(
         kind, eta)
     else:
-      folder_path = "results/pickle_files/locart_experiments_results/{}_data_eta".format(
+      folder_path = "/results/pickle_files/locart_experiments_results/{}_data".format(
         kind)
         
     # creating directories to each file
-    os.makedir(original_path + folder_path)
+    if not(path.exists(original_path + folder_path)):
+      os.mkdir(original_path + folder_path)
         
     # simulating several y from same X
     sim_obj = simulation(dim = d, coef = coef, hetero_value = hetero_value, asym_value = asym_value, t_degree = t_degree)
@@ -93,7 +108,7 @@ def compute_conformal_statistics(kind = "homoscedastic",
       # if not, we run all and save all together in the same folder
       if not(path.exists(folder_path + "/{}_score_{}_dim_{}_samples_measures".format(
         kind, type_score, d, n))):
-        print("running the experiments for {} training and calibration samples and for {} data".format(n, kind))
+        print("running the experiments for {} training and calibration samples in the {} setting".format(n, kind))
         # measures to be saved at last
         mean_int_length_vector, median_int_length_vector = np.zeros((n_it, 5)), np.zeros((n_it, 5))
         mean_diff_vector, median_diff_vector = np.zeros((n_it, 5)), np.zeros((n_it, 5))
@@ -106,7 +121,7 @@ def compute_conformal_statistics(kind = "homoscedastic",
           # simulating data and then splitting into train and calibration sets
           sim_kind = getattr(sim_obj, kind)
           sim_kind(2*n, random_seed = random_seeds[i])
-          split_icp = split(sim_obj.X, sim_obj.y, test_size = 0.5,calibrate = False)
+          split_icp = split(sim_obj.X, sim_obj.y, test_size = 0.5, calibrate = False, random_seed = random_seeds[i])
           
           # starting experiments, saving all tables in 
           if type_score == "regression":
@@ -142,8 +157,6 @@ def compute_conformal_statistics(kind = "homoscedastic",
               mean_diff_vector[i, 1], median_diff_vector[i, 1]  = np.mean(np.abs(cond_locart_real - (1 - sig))), np.median(np.abs(cond_locart_real - (1 - sig)))
               mean_coverage_vector[i, 1], median_coverage_vector[i, 1]  = np.mean(cond_locart_real), np.median(cond_locart_real)
               mean_int_length_vector[i, 1], median_int_length_vector[i, 1] = np.mean(locart_interval_len), np.median(locart_interval_len)
-              
-              end_loc = time.time() - start_loc
       
               # fitting default regression split
               model = base_model(**kwargs)
@@ -167,8 +180,6 @@ def compute_conformal_statistics(kind = "homoscedastic",
               wicp = LocalRegressionSplit(base_model, alpha = sig, **kwargs)
               wicp.fit(split_icp["X_train"], split_icp["y_train"])
               wicp.calibrate(split_icp["X_test"], split_icp["y_test"])
-      
-              end_weighted_split = time.time() - start_weighted_split
 
               # weighted icp real coverage and interval length
               wicp_cond_r_real = real_coverage(wicp.predict(X_test), y_mat)
@@ -179,16 +190,11 @@ def compute_conformal_statistics(kind = "homoscedastic",
               mean_coverage_vector[i, 3], median_coverage_vector[i, 3]  = np.mean(wicp_cond_r_real), np.median(wicp_cond_r_real)
               mean_int_length_vector[i, 3], median_int_length_vector[i, 3] = np.mean(wicp_interval_len), np.median(wicp_interval_len)
               
-      
-              end_weighted_split = time.time() - start_weighted_split
-      
-              start_euclidean = time.time()
+
               # fitting uniform binning regression split
               locart_obj.uniform_binning(split_icp["X_test"], split_icp["y_test"])
-              end_euclidean = time.time() - start_euclidean
       
               # computing local coverage to uniform binning
-              start_euclidean = time.time()
               pred_uniform = np.array(locart_obj.predict(X_test, length = 2000, type_model = "euclidean"))
               uniform_cond_r_real = real_coverage(pred_uniform, y_mat)
               uniform_interval_len = compute_interval_length(pred_uniform)
@@ -197,12 +203,9 @@ def compute_conformal_statistics(kind = "homoscedastic",
               mean_diff_vector[i, 4], median_diff_vector[i, 4]  = np.mean(np.abs(uniform_cond_r_real - (1 - sig))), np.median(np.abs(uniform_cond_r_real- (1 - sig)))
               mean_coverage_vector[i, 4], median_coverage_vector[i, 4]  = np.mean(uniform_cond_r_real), np.median(uniform_cond_r_real)
               mean_int_length_vector[i, 4], median_int_length_vector[i, 4] = np.mean(uniform_interval_len), np.median(uniform_interval_len)
-              )
-      
-              end_euclidean = time.time() - start_euclidean
 
         # creating directory
-        os.makedir(original_path + folder_path +"/{}_score_{}_dim_{}_samples_measures".format(
+        os.mkdir(original_path + folder_path +"/{}_score_{}_dim_{}_samples_measures".format(
         kind, type_score, d, n))
         
         # changing working directory to the current folder
@@ -230,10 +233,13 @@ def compute_conformal_statistics(kind = "homoscedastic",
         
         # returning to original path
         os.chdir(original_path)
-    
-    print("Experiments finished for {} data".format(kind))
+      
+      else:
+        continue
+      
+    print("Experiments finished for {} setting".format(kind))
     end_kind = time.time() - start_kind
-    print("Time Elapsed to compute all metrics to {} data: {}".format(kind, end_kind))
+    print("Time Elapsed to compute all metrics in the {} setting: {}".format(kind, end_kind))
     return end_kind
 
 # method that make all the computations for all kinds of data
@@ -247,10 +253,11 @@ def compute_all_conformal_statistics(
     start_exp = time.time()
     times_list = list()
     for kinds in kind_lists:
-      times_list.append(compute_conformal_statistic(kind = kinds, n_it = n_it, n_train = n_train, d = d))
+      times_list.append(compute_conformal_statistics(kind = kinds, n_it = n_it, n_train = n_train, d = d))
     end_exp = time.time() - start_exp
     print("Time elapsed to conduct all experiments: {}".format(end_exp))
     np.save("results/pickle_files/locart_experiments_results/running_times.npy", np.array(times_list.append(end_exp)))
+    return None
 
 if __name__ == '__main__':
   print("We will now compute all conformal statistics for several simulated examples")
