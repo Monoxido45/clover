@@ -135,7 +135,6 @@ class KmeansSplit(BaseEstimator):
             # computing residual for all the grid
             res = self.nc_score.compute(X[i, :].reshape(1, -1), y_grid)
             # obtaining cutoff indexes and cutoff points according to choosed type of model
-            print(self.apply(new_X[i, :].reshape(1, -1)))
 
             cutoff_idx = np.where(self.groups_idx == self.apply(new_X[i, :].reshape(1, -1)))[0][0]
 
