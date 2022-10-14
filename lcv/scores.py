@@ -7,7 +7,10 @@ from abc import ABC, abstractmethod
 # defining score basic class
 class Scores(ABC):
     def __init__(self, base_model, **kwargs):
-        self.base_model = base_model(**kwargs)
+        if base_model != None:
+            self.base_model = base_model(**kwargs)
+        else:
+            self.base_model = base_model
 
     @abstractmethod
     def fit(self, X, y):
@@ -28,13 +31,19 @@ class RegressionScore(Scores):
     '''
     
     def fit(self, X, y):
-        self.base_model.fit(X, y)
-        return self
+        if self.base_model != None:
+            self.base_model.fit(X, y)
+            return self
+        else:
+            return self
     
     def compute(self, X_calib, y_calib):
-        pred = self.base_model.predict(X_calib)
-        res = np.abs(pred - y_calib)
-        return res
+        if self.base_model != None:
+            pred = self.base_model.predict(X_calib)
+            res = np.abs(pred - y_calib)
+            return res
+        else:
+            return np.abs(y_calib)
     
 # local rgression score
 
