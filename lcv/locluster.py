@@ -1,6 +1,6 @@
 from __future__ import division
 
-# basic libraries to use
+# basic libraries we are using
 import numpy as np
 from scipy import stats
 
