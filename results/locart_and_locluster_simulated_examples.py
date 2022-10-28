@@ -48,7 +48,7 @@ def split(X, y, test_size = 0.4, calibrate = True, random_seed = 1250):
   
 def compute_conformal_statistics(kind = "homoscedastic",
            n_it = 200,
-           n_train = np.concatenate((np.array([500]), np.arange(1000, 10000, 1000))),
+           n_train = np.array([500, 1000, 5000, 10000]),
            d = 20, 
            coef = 2,
            hetero_value = 0.25,
@@ -106,7 +106,7 @@ def compute_conformal_statistics(kind = "homoscedastic",
     for n in n_train:
       # testing wheter we already have all saved
       # if not, we run all and save all together in the same folder
-      if not(path.exists(folder_path + "/{}_score_{}_dim_{}_samples_measures".format(
+      if not(path.exists(original_path + folder_path + "/{}_score_{}_dim_{}_{}_samples_measures".format(
         kind, type_score, d, n))):
         print("running the experiments for {} training and calibration samples in the {} setting".format(n, kind))
         # measures to be saved at last
@@ -205,11 +205,11 @@ def compute_conformal_statistics(kind = "homoscedastic",
               mean_int_length_vector[i, 4], median_int_length_vector[i, 4] = np.mean(uniform_interval_len), np.median(uniform_interval_len)
 
         # creating directory
-        os.mkdir(original_path + folder_path +"/{}_score_{}_dim_{}_samples_measures".format(
+        os.mkdir(original_path + folder_path +"/{}_score_{}_dim_{}_{}_samples_measures".format(
         kind, type_score, d, n))
         
         # changing working directory to the current folder
-        os.chdir(original_path + folder_path +"/{}_score_{}_dim_{}_samples_measures".format(
+        os.chdir(original_path + folder_path +"/{}_score_{}_dim_{}_{}_samples_measures".format(
         kind, type_score, d, n))
           
         # saving all matrices into npy files
@@ -223,13 +223,13 @@ def compute_conformal_statistics(kind = "homoscedastic",
         np.save("mean_diff_n_{}_{}_data.npy".format(
           n, kind), mean_diff_vector)
         np.save("median_diff_n_{}_{}_data.npy".format(
-          n, kind), mean_diff_vector)
+          n, kind), median_diff_vector)
           
         # conditional difference
         np.save("mean_coverage_n_{}_{}_data.npy".format(
           n, kind), mean_coverage_vector)
-        np.save("mean_coverage_n_{}_{}_data.npy".format(
-          n, kind), mean_coverage_vector)
+        np.save("median_coverage_n_{}_{}_data.npy".format(
+          n, kind), median_coverage_vector)
         
         # returning to original path
         os.chdir(original_path)
@@ -247,7 +247,7 @@ def compute_conformal_statistics(kind = "homoscedastic",
 def compute_all_conformal_statistics(
   kind_lists = ["homoscedastic", "heteroscedastic", "asymmetric", "asymmetric_V2", "t_residuals", "non_cor_heteroscedastic"],
   n_it = 200,
-  n_train = np.concatenate((np.array([500]), np.arange(1000, 10000, 1000))),
+  n_train = np.array([500, 1000, 5000, 10000]),
   d = 20):
     print("Starting all experiments")
     start_exp = time.time()
