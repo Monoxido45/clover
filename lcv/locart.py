@@ -38,12 +38,14 @@ class LocartSplit(BaseEstimator):
         split_calib=True,
         **kwargs
     ):
-        self.base_model = base_model
+
         self.base_model_type = base_model_type
         if ("Quantile" in str(nc_score)) or (base_model_type == True):
-            self.nc_score = nc_score(self.base_model, coverage=alpha, **kwargs)
+            self.nc_score = nc_score(base_model, alpha=alpha, **kwargs)
         else:
-            self.nc_score = nc_score(self.base_model, **kwargs)
+            self.nc_score = nc_score(base_model, **kwargs)
+
+        self.base_model = self.nc_score.base_model
         self.alpha = alpha
         self.cart_type = cart_type
         self.split_calib = split_calib

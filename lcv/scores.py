@@ -10,8 +10,6 @@ class Scores(ABC):
     def __init__(self, base_model, **kwargs):
         if base_model is not None:
             self.base_model = base_model(**kwargs)
-        else:
-            self.base_model = base_model
 
     @abstractmethod
     def fit(self, X, y):
@@ -49,8 +47,6 @@ class RegressionScore(Scores):
 
 
 # local rgression score
-
-
 class LocalRegressionScore(Scores):
     """
     Non conformity regression local-variant score

@@ -34,12 +34,14 @@ class KmeansSplit(BaseEstimator):
         quantile_type="GBQR",
         **kwargs
     ):
-        self.base_model = base_model
         self.base_model_type = base_model_type
         if ("Quantile" in str(nc_score)) or (base_model_type == True):
-            self.nc_score = nc_score(self.base_model, coverage=alpha, **kwargs)
+            self.nc_score = nc_score(base_model, alpha=alpha, **kwargs)
         else:
-            self.nc_score = nc_score(self.base_model, **kwargs)
+            self.nc_score = nc_score(base_model, **kwargs)
+
+        # Base model must be an object instance to generate object representations
+        self.base_model = self.nc_score.base_model
         self.alpha = alpha
         self.quantile_type = quantile_type
 
@@ -163,7 +165,7 @@ class KmeansSplit(BaseEstimator):
             )[0][0]
 
             # finding interval/region limits
-            ident_int = np.diff((res <= self.cutoffs[cutoff_idx]) + 0)
+            ident_int = np.diff((res <= self.cutoffs[cutoff_idx]).astype(np.int32))
             ident_idx = np.where(ident_int != 0)[0]
 
             # -1 indicates end of the invervals and 1 the beggining
@@ -190,6 +192,7 @@ class GradientBoostingQuantileEnsemble(BaseEstimator):
         loss="quantile",
         **kwargs
     ):
+        self.random_states = random_states
         self.quantiles = quantiles
         self.loss = loss
         # declarando os modelos
