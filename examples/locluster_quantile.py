@@ -7,10 +7,10 @@ from lcv.scores import QuantileScore
 from lcv.simulation import simulation
 from lcv.utils import compute_interval_length, real_coverage
 
-n_train = 500  # com 50 tbm
+n_train = 1000  # com 50 tbm
 n_test_X = 5 * 10 ** 3
 n_test_y = 10 ** 3
-n_it = 200
+n_it = 5
 
 random_seeds = np.random.randint(0, 10 ** (8), size=n_it)
 rng = np.random.RandomState(1250)
