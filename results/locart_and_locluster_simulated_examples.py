@@ -1,26 +1,22 @@
 # importing all needed packages
 # models being used
-from lcv.locart import LocartSplit, LocalRegressionSplit
-from lcv.locluster import KmeansSplit
-from nonconformist.cp import IcpRegressor
-from nonconformist.nc import NcFactory
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from lcv.scores import RegressionScore
-import numpy as np
-
 # miscellanous
 import os
-from os import path
 import time
+from os import path
 
-# importing simulation
+import numpy as np
+from nonconformist.cp import IcpRegressor
+from nonconformist.nc import NcFactory
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+
+from lcv.locart import LocalRegressionSplit, LocartSplit
+from lcv.locluster import KmeansSplit
+from lcv.scores import RegressionScore
+from lcv.simulation import simulation
+
 original_path = os.getcwd()
-os.chdir(original_path + "/results")
-from simulation import simulation
-
-# returning to original path
-os.chdir(original_path)
 
 # methods to compute coverage and interval length
 def real_coverage(model_preds, y_mat):
