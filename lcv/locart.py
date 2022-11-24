@@ -231,8 +231,24 @@ class LocartSplit(BaseEstimator):
                 )[0][0]
                 # finding interval/region limits
                 ident_int = np.diff((res <= self.cutoffs[cutoff_idx]) + 0)
-                ident_idx = np.where(ident_int != 0)[0]
 
+            elif type_model == "euclidean":
+                # obtaining X cutoff index
+                cutoff_idx = np.where(
+                    self.cartesian_ints == self.uniform_apply(X[i, :].reshape(1, -1))
+                )[0][0]
+                # finding interval/region limits
+                ident_int = np.diff((res <= self.unif_cutoffs[cutoff_idx]) + 0)
+
+            ident_idx = np.where(ident_int != 0)[0]
+
+            if len(ident_idx) == 0 and self.base_model_type == True:
+                intervals_list.append(
+                    self.base_model.predict(X[i, :].reshape(1, -1)).flatten()
+                )
+            elif len(ident_idx) == 0 and self.base_model_type is None:
+                intervals_list.append(np.array([self.min_y, self.max_y]))
+            else:
                 # -1 indicates end of the invervals and 1 the beggining
                 # if we start the identifier with -1, that means the first entry is the beggining
                 if ident_int[ident_idx[0]] == -1:
@@ -246,29 +262,8 @@ class LocartSplit(BaseEstimator):
                     np.array([1, 0]), int(ident_idx.shape[0] / 2)
                 )
                 intervals_list.append(y_grid[int_idx])
-            elif type_model == "euclidean":
-                # obtaining X cutoff index
-                cutoff_idx = np.where(
-                    self.cartesian_ints == self.uniform_apply(X[i, :].reshape(1, -1))
-                )[0][0]
-                # finding interval/region limits
-                ident_int = np.diff((res <= self.unif_cutoffs[cutoff_idx]) + 0)
-                ident_idx = np.where(ident_int != 0)[0]
 
-                # -1 indicates end of the invervals and 1 the beggining
-                # if we start the identifier with -1, that means the first entry is the beggining
-                if ident_int[ident_idx[0]] == -1:
-                    ident_idx = np.insert(ident_idx, 0, -1)
-                # if we finish with 1, that means the last entry is the end
-                if ident_int[ident_idx[-1]] == 1:
-                    ident_idx = np.append(ident_idx, y_grid.shape[0] - 1)
-
-                # after turning the array even shaped we add one to the lower limit of intervals
-                int_idx = ident_idx + np.tile(
-                    np.array([1, 0]), int(ident_idx.shape[0] / 2)
-                )
-                intervals_list.append(y_grid[int_idx])
-        return intervals_list
+        return np.array(intervals_list)
 
 
 class QuantileSplit(BaseEstimator):
