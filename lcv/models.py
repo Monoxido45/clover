@@ -3,6 +3,8 @@ from sklearn.base import BaseEstimator
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.utils.validation import check_is_fitted
 
+from lcv.scores import QuantileScore
+
 
 class QuantileGradientBoosting(BaseEstimator):
     def __init__(self, alpha=0.05, random_state=None, **kwargs):

@@ -1,67 +1,24 @@
 # importing all needed packages
 # models being used
-from lcv.locart import LocartSplit, LocalRegressionSplit
-from lcv.locluster import KmeansSplit
-from nonconformist.cp import IcpRegressor
-from nonconformist.nc import NcFactory
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from lcv.scores import RegressionScore
-from lcv.simulation import simulation
-import numpy as np
-
 # miscellanous
 import os
-from os import path
 import time
+from os import path
 
-# importing simulation
+import numpy as np
+from nonconformist.cp import IcpRegressor
+from nonconformist.nc import NcFactory
+from sklearn.ensemble import RandomForestRegressor
+
+from lcv.cqr import ConformalizedQuantileRegression
+from lcv.locart import LocalRegressionSplit, LocartSplit
+from lcv.locluster import KmeansSplit
+from lcv.models import QuantileGradientBoosting
+from lcv.scores import RegressionScore, QuantileScore
+from lcv.simulation import simulation
+from lcv.utils import compute_interval_length, real_coverage, split
+
 original_path = os.getcwd()
-os.chdir(original_path + "/results")
-
-# returning to original path
-os.chdir(original_path)
-
-# methods to compute coverage and interval length
-def real_coverage(model_preds, y_mat):
-    r = np.zeros(model_preds.shape[0])
-    for i in range(model_preds.shape[0]):
-        r[i] = np.mean(
-            np.logical_and(
-                y_mat[i, :] >= model_preds[i, 0], y_mat[i, :] <= model_preds[i, 1]
-            )
-        )
-    return r
-
-
-def compute_interval_length(predictions):
-    return predictions[:, 1] - predictions[:, 0]
-
-
-# split function
-def split(X, y, test_size=0.4, calibrate=True, random_seed=1250):
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_seed
-    )
-    if calibrate:
-        X_train, X_calib, y_train, y_calib = train_test_split(
-            X_train, y_train, test_size=0.3, random_state=random_seed
-        )
-        return {
-            "X_train": X_train,
-            "X_calib": X_calib,
-            "X_test": X_test,
-            "y_train": y_train,
-            "y_calib": y_calib,
-            "y_test": y_test,
-        }
-    else:
-        return {
-            "X_train": X_train,
-            "X_test": X_test,
-            "y_train": y_train,
-            "y_test": y_test,
-        }
 
 
 def compute_conformal_statistics(
@@ -91,7 +48,7 @@ def compute_conformal_statistics(
     max_leaf_nodes=None,
     min_samples_leaf=150,
     prune=True,
-    **kwargs
+    **kwargs,
 ):
     # starting the experiment
     print("Starting experiments for {} data".format(kind))
@@ -179,13 +136,14 @@ def compute_conformal_statistics(
                     random_seed=random_seeds[i],
                 )
 
-                # starting experiments, saving all tables in
-                if type_score == "regression":
+                if type_score == "quantile":
+                    # fitting locluster
                     locluster_obj = KmeansSplit(
-                        nc_score=RegressionScore,
+                        nc_score=QuantileScore,
                         base_model=base_model,
+                        base_model_type=True,
                         alpha=sig,
-                        **kwargs
+                        **kwargs,
                     )
                     locluster_obj.fit(split_icp["X_train"], split_icp["y_train"])
                     locluster_obj.calib(
@@ -199,9 +157,8 @@ def compute_conformal_statistics(
                     )
 
                     # conditional coverage and interval length
-                    pred_locluster = np.array(
-                        locluster_obj.predict(X_test, length=2000)
-                    )
+                    pred_locluster = locluster_obj.predict(X_test, length=2000)
+
                     cond_locluster_real = real_coverage(pred_locluster, y_mat)
                     locluster_interval_len = compute_interval_length(pred_locluster)
 
@@ -214,18 +171,19 @@ def compute_conformal_statistics(
                         np.mean(cond_locluster_real),
                         np.median(cond_locluster_real),
                     )
-                    mean_int_length_vector[i, 0], median_int_length_vector[i, 0] = (
+                    (mean_int_length_vector[i, 0], median_int_length_vector[i, 0],) = (
                         np.mean(locluster_interval_len),
                         np.median(locluster_interval_len),
                     )
 
                     # fitting locart
                     locart_obj = LocartSplit(
-                        nc_score=RegressionScore,
+                        nc_score=QuantileScore,
                         base_model=base_model,
                         alpha=sig,
                         split_calib=split_calib,
-                        **kwargs
+                        base_model_type=True,
+                        **kwargs,
                     )
                     locart_obj.fit(split_icp["X_train"], split_icp["y_train"])
                     locart_obj.calib(
@@ -239,7 +197,7 @@ def compute_conformal_statistics(
                     )
 
                     # conditional coverage and interval length
-                    pred_locart = np.array(locart_obj.predict(X_test, length=2000))
+                    pred_locart = locart_obj.predict(X_test, length=2000)
                     cond_locart_real = real_coverage(pred_locart, y_mat)
                     locart_interval_len = compute_interval_length(pred_locart)
 
@@ -252,7 +210,156 @@ def compute_conformal_statistics(
                         np.mean(cond_locart_real),
                         np.median(cond_locart_real),
                     )
-                    mean_int_length_vector[i, 1], median_int_length_vector[i, 1] = (
+                    (mean_int_length_vector[i, 1], median_int_length_vector[i, 1],) = (
+                        np.mean(locart_interval_len),
+                        np.median(locart_interval_len),
+                    )
+
+                    # Fitting with uniform binning
+                    locart_obj.uniform_binning(split_icp["X_test"], split_icp["y_test"])
+
+                    # computing local coverage to uniform binning
+                    pred_uniform = locart_obj.predict(
+                        X_test, length=2000, type_model="euclidean"
+                    )
+
+                    uniform_cond_r_real = real_coverage(pred_uniform, y_mat)
+                    uniform_interval_len = compute_interval_length(pred_uniform)
+
+                    # computing euclidean binning measures
+                    mean_diff_vector[i, 2], median_diff_vector[i, 2] = (
+                        np.mean(np.abs(uniform_cond_r_real - (1 - sig))),
+                        np.median(np.abs(uniform_cond_r_real - (1 - sig))),
+                    )
+                    mean_coverage_vector[i, 2], median_coverage_vector[i, 2] = (
+                        np.mean(uniform_cond_r_real),
+                        np.median(uniform_cond_r_real),
+                    )
+                    (mean_int_length_vector[i, 2], median_int_length_vector[i, 2],) = (
+                        np.mean(uniform_interval_len),
+                        np.median(uniform_interval_len),
+                    )
+
+                    # fitting CQR with quantile gradient boosting
+                    cqr_base = QuantileGradientBoosting(alpha=sig)
+                    cqr_obj = ConformalizedQuantileRegression(cqr_base, alpha=sig)
+                    cqr_obj.fit(split_icp["X_train"], split_icp["y_train"])
+                    cqr_obj.calib(split_icp["X_test"], split_icp["y_test"])
+
+                    # conditional coverage and interval length
+                    pred_cqr = cqr_obj.predict(X_test)
+                    cond_cqr_real = real_coverage(pred_cqr, y_mat)
+                    cqr_interval_len = compute_interval_length(pred_cqr)
+
+                    # several measures
+                    mean_diff_vector[i, 3], median_diff_vector[i, 3] = (
+                        np.mean(np.abs(cond_cqr_real - (1 - sig))),
+                        np.median(np.abs(cond_cqr_real - (1 - sig))),
+                    )
+                    mean_coverage_vector[i, 3], median_coverage_vector[i, 3] = (
+                        np.mean(cond_cqr_real),
+                        np.median(cond_cqr_real),
+                    )
+                    (mean_int_length_vector[i, 3], median_int_length_vector[i, 3],) = (
+                        np.mean(cqr_interval_len),
+                        np.median(cqr_interval_len),
+                    )
+
+                    # fitting quantile gradient boosting (non-conformalized)
+                    qgb_obj = QuantileGradientBoosting(alpha=sig)
+                    qgb_obj.fit(split_icp["X_train"], split_icp["y_train"])
+
+                    pred_qgb = qgb_obj.predict(X_test)
+                    cond_qgb_real = real_coverage(pred_qgb, y_mat)
+                    qgb_interval_len = compute_interval_length(pred_qgb)
+
+                    # several measures
+                    mean_diff_vector[i, 4], median_diff_vector[i, 4] = (
+                        np.mean(np.abs(cond_qgb_real - (1 - sig))),
+                        np.median(np.abs(cond_qgb_real - (1 - sig))),
+                    )
+                    mean_coverage_vector[i, 4], median_coverage_vector[i, 4] = (
+                        np.mean(cond_qgb_real),
+                        np.median(cond_qgb_real),
+                    )
+                    (mean_int_length_vector[i, 4], median_int_length_vector[i, 4],) = (
+                        np.mean(qgb_interval_len),
+                        np.median(qgb_interval_len),
+                    )
+
+                # starting experiments, saving all tables in
+                if type_score == "regression":
+                    locluster_obj = KmeansSplit(
+                        nc_score=RegressionScore,
+                        base_model=base_model,
+                        alpha=sig,
+                        **kwargs,
+                    )
+                    locluster_obj.fit(split_icp["X_train"], split_icp["y_train"])
+                    locluster_obj.calib(
+                        split_icp["X_test"],
+                        split_icp["y_test"],
+                        tune_k=tune_k,
+                        prop_k=prop_k,
+                        n_estimators=n_estimators,
+                        quantiles=quantiles,
+                        random_states=random_states,
+                    )
+
+                    # conditional coverage and interval length
+                    pred_locluster = locluster_obj.predict(X_test, length=2000)
+
+                    cond_locluster_real = real_coverage(pred_locluster, y_mat)
+                    locluster_interval_len = compute_interval_length(pred_locluster)
+
+                    # saving several measures
+                    mean_diff_vector[i, 0], median_diff_vector[i, 0] = (
+                        np.mean(np.abs(cond_locluster_real - (1 - sig))),
+                        np.median(np.abs(cond_locluster_real - (1 - sig))),
+                    )
+                    mean_coverage_vector[i, 0], median_coverage_vector[i, 0] = (
+                        np.mean(cond_locluster_real),
+                        np.median(cond_locluster_real),
+                    )
+                    (mean_int_length_vector[i, 0], median_int_length_vector[i, 0],) = (
+                        np.mean(locluster_interval_len),
+                        np.median(locluster_interval_len),
+                    )
+
+                    # fitting locart
+                    locart_obj = LocartSplit(
+                        nc_score=RegressionScore,
+                        base_model=base_model,
+                        alpha=sig,
+                        split_calib=split_calib,
+                        **kwargs,
+                    )
+                    locart_obj.fit(split_icp["X_train"], split_icp["y_train"])
+                    locart_obj.calib(
+                        split_icp["X_test"],
+                        split_icp["y_test"],
+                        max_depth=max_depth,
+                        max_leaf_nodes=max_leaf_nodes,
+                        min_samples_leaf=min_samples_leaf,
+                        criterion=criterion,
+                        prune_tree=prune,
+                    )
+
+                    # conditional coverage and interval length
+                    pred_locart = locart_obj.predict(X_test, length=2000)
+                    cond_locart_real = real_coverage(pred_locart, y_mat)
+                    locart_interval_len = compute_interval_length(pred_locart)
+
+                    # several measures
+                    mean_diff_vector[i, 1], median_diff_vector[i, 1] = (
+                        np.mean(np.abs(cond_locart_real - (1 - sig))),
+                        np.median(np.abs(cond_locart_real - (1 - sig))),
+                    )
+                    mean_coverage_vector[i, 1], median_coverage_vector[i, 1] = (
+                        np.mean(cond_locart_real),
+                        np.median(cond_locart_real),
+                    )
+                    (mean_int_length_vector[i, 1], median_int_length_vector[i, 1],) = (
                         np.mean(locart_interval_len),
                         np.median(locart_interval_len),
                     )
@@ -281,7 +388,7 @@ def compute_conformal_statistics(
                         np.mean(icp_cond_r_real),
                         np.median(icp_cond_r_real),
                     )
-                    mean_int_length_vector[i, 2], median_int_length_vector[i, 2] = (
+                    (mean_int_length_vector[i, 2], median_int_length_vector[i, 2],) = (
                         np.mean(icp_interval_len),
                         np.median(icp_interval_len),
                     )
@@ -304,7 +411,7 @@ def compute_conformal_statistics(
                         np.mean(wicp_cond_r_real),
                         np.median(wicp_cond_r_real),
                     )
-                    mean_int_length_vector[i, 3], median_int_length_vector[i, 3] = (
+                    (mean_int_length_vector[i, 3], median_int_length_vector[i, 3],) = (
                         np.mean(wicp_interval_len),
                         np.median(wicp_interval_len),
                     )
@@ -313,9 +420,10 @@ def compute_conformal_statistics(
                     locart_obj.uniform_binning(split_icp["X_test"], split_icp["y_test"])
 
                     # computing local coverage to uniform binning
-                    pred_uniform = np.array(
-                        locart_obj.predict(X_test, length=2000, type_model="euclidean")
+                    pred_uniform = locart_obj.predict(
+                        X_test, length=2000, type_model="euclidean"
                     )
+
                     uniform_cond_r_real = real_coverage(pred_uniform, y_mat)
                     uniform_interval_len = compute_interval_length(pred_uniform)
 
@@ -328,7 +436,7 @@ def compute_conformal_statistics(
                         np.mean(uniform_cond_r_real),
                         np.median(uniform_cond_r_real),
                     )
-                    mean_int_length_vector[i, 4], median_int_length_vector[i, 4] = (
+                    (mean_int_length_vector[i, 4], median_int_length_vector[i, 4],) = (
                         np.mean(uniform_interval_len),
                         np.median(uniform_interval_len),
                     )
@@ -404,7 +512,9 @@ def compute_all_conformal_statistics(
         "non_cor_heteroscedastic",
     ],
     n_it=200,
+    type_score="regression",
     n_train=np.array([500, 1000, 5000, 10000]),
+    base_model=RandomForestRegressor,
     d=20,
 ):
     print("Starting all experiments")
@@ -412,12 +522,19 @@ def compute_all_conformal_statistics(
     times_list = list()
     for kinds in kind_lists:
         times_list.append(
-            compute_conformal_statistics(kind=kinds, n_it=n_it, n_train=n_train, d=d)
+            compute_conformal_statistics(
+                kind=kinds,
+                type_score=type_score,
+                base_model=base_model,
+                n_it=n_it,
+                n_train=n_train,
+                d=d,
+            )
         )
     end_exp = time.time() - start_exp
     print("Time elapsed to conduct all experiments: {}".format(end_exp))
     np.save(
-        "results/pickle_files/locart_experiments_results/running_times.npy",
+        f"results/pickle_files/locart_experiments_results/running_times-{type_score}.npy",
         np.array(times_list.append(end_exp)),
     )
     return None
@@ -425,5 +542,9 @@ def compute_all_conformal_statistics(
 
 if __name__ == "__main__":
     print("We will now compute all conformal statistics for several simulated examples")
-    compute_all_conformal_statistics()
-
+    compute_all_conformal_statistics(
+        type_score="regression", base_model=RandomForestRegressor
+    )
+    compute_all_conformal_statistics(
+        type_score="quantile", base_model=QuantileGradientBoosting
+    )
