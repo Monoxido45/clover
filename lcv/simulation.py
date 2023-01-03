@@ -97,6 +97,34 @@ class simulation:
         self.X, self.y = X, y
         self.kind = "heteroscedastic"
 
+    def heteroscedastic_latent(self, n, random_seed=1250):
+        np.random.seed(random_seed)
+        # generating the latent variables first then the uniforms
+        X = np.column_stack(
+            (
+                np.random.binomial(1, p=0.2, size=n),
+                np.random.uniform(low=-5, high=5, size=(n, self.dim + 1)),
+            )
+        )
+
+        eps1 = np.random.normal(0, scale=1, size=n)
+        eps2 = np.random.normal(0, scale=0.1, size=n)
+
+        # generating responses according to lantet variables
+        y = (
+            3 * eps2
+            + (
+                (X[:, 0] == 1)
+                * ((-0.2 * eps1 * (X[:, 1] - 5)) - (X[:, 1] * (X[:, 1] > 0)))
+            )
+            + (
+                (X[:, 0] == 0)
+                * ((0.2 * eps1 * (X[:, 1] + 5)) + (X[:, 1] * (X[:, 1] > 0)))
+            )
+        )
+        self.X, self.y = X[:, 1:], y
+        self.kind = "heteroscedastic_latent"
+
     def non_cor_heteroscedastic(self, n, random_seed=1250):
         np.random.seed(random_seed)
         X = np.random.uniform(low=-1.5, high=1.5, size=(n, self.dim))
@@ -144,6 +172,24 @@ class simulation:
             y_mat[i, :] = np.random.normal(
                 self.coef * X_grid[i],
                 scale=np.sqrt(self.hetero_value + self.coef * np.abs(X_grid[i])),
+                size=B,
+            )
+        return y_mat
+
+    def heteroscedastic_latent_r(self, X_grid, B=1000):
+        y_mat = np.zeros((X_grid.shape[0], B))
+        for i in range(X_grid.shape[0]):
+            # indicator variables
+            # for X1
+            x_large = (X_grid[i, 1] > 0) + 0
+            # for X0
+            x_0, x_1 = (X_grid[i, 0] == 0) + 0, (X_grid[i, 0] == 1) + 0
+
+            y_mat[i, :] = np.random.normal(
+                x_large * ((x_0 - x_1) * X_grid[i, 1]),
+                scale=np.sqrt(
+                    (9 * (0.01)) + (0.04 * ((X_grid[i, 1] + ((x_0 - x_1) * 5)) ** 2))
+                ),
                 size=B,
             )
         return y_mat

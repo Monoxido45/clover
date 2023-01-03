@@ -85,7 +85,6 @@ def compute_conformal_statistics(
     y_mat = r_kind(X_test[:, 0], B=B_y)
 
     # generating random_seed vector for the sake of reproducibility
-    np.random.seed(random_seed)
     random_seeds = np.random.randint(0, 10 ** (8), n_it)
 
     for n in n_train:
