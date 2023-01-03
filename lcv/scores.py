@@ -71,6 +71,11 @@ class LocalRegressionScore(Scores):
 
         pred_reg = self.base_model.predict(X_res)
         pred_mad = self.mad_model.predict(X_res)
+        
+        # saving mad and vanilla res to objects if needed
+        self.pred_mad = pred_mad
+        self.vanilla_res = np.abs(pred_reg - y_res)
+
         res = np.abs(pred_reg - y_res) / pred_mad
         return res
 

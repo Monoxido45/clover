@@ -301,8 +301,8 @@ class LocalRegressionSplit(BaseEstimator):
         self.nc_score.fit(X_train, y_train)
         return self
 
-    def calibrate(self, X_calib, y_calib):
-        res = self.nc_score.compute(X_calib, y_calib)
+    def calibrate(self, X_calib, y_calib, random_state=1250):
+        res = self.nc_score.compute(X_calib, y_calib, random_state=random_state)
         self.cutoff = np.quantile(res, q=1 - self.alpha)
         return None
 
@@ -312,4 +312,71 @@ class LocalRegressionSplit(BaseEstimator):
         pred = np.vstack(
             (pred_mu - (pred_mad * self.cutoff), pred_mu + (pred_mad * self.cutoff))
         ).T
+        return pred
+
+
+# Mondrian split method proposed by Bostrom et al
+class MondrianRegressionSplit(BaseEstimator):
+    def __init__(self, base_model, alpha, k=10, **kwargs):
+        self.base_model = base_model
+        self.k = k
+        self.nc_score = LocalRegressionScore(self.base_model, **kwargs)
+        self.alpha = alpha
+
+    def fit(self, X_train, y_train):
+        # fitting the base model
+        self.nc_score.fit(X_train, y_train)
+        return self
+
+    def calibrate(self, X_calib, y_calib, random_state=1250):
+        # computing first the local score
+        res = self.nc_score.compute(X_calib, y_calib, random_state=random_state)
+
+        # using vanilla score
+        res = self.nc_score.vanilla_res
+
+        # now making local partitions based on variance percentile
+        # returning the predicted mad
+        pred_mad = self.nc_score.pred_mad
+
+        # binning into k percentiles
+        alphas = np.arange(1, self.k) / self.k
+        self.mondrian_quantiles = np.quantile(pred_mad, q=alphas, axis=0)
+
+        # iterating percentiles to obtain local cutoffs
+        # first obtaining interval index by apply function
+        int_idx = self.apply(pred_mad)
+        self.mondrian_cutoffs = np.zeros(self.k)
+
+        # obtaing all cutoffs
+        for i in range(0, self.k):
+            self.mondrian_cutoffs[i] = np.quantile(
+                res[np.where(int_idx == i)], q=1 - self.alpha
+            )
+        return None
+
+    def apply(self, mad):
+        int_idx = np.zeros(mad.shape[0])
+        for i in range(mad.shape[0]):
+            index = np.where(mad[i] <= self.mondrian_quantiles)[0]
+            # first testing if mad is in any interval before the last quantile
+            if index.shape[0] >= 1:
+                int_idx[i] = index[0]
+            else:
+                int_idx[i] = self.k - 1
+        return int_idx
+
+    def predict(self, X_test):
+        # predicting mu
+        pred_mu = self.nc_score.base_model.predict(X_test)
+
+        # prediciting mad
+        pred_mad = self.nc_score.mad_model.predict(X_test)
+
+        # assigning different cutoffs based on mad
+        # first obtaining interval indexes
+        int_idx = self.apply(pred_mad)
+        cutoffs = self.mondrian_cutoffs[int_idx.astype(int)]
+
+        pred = np.vstack((pred_mu - cutoffs, pred_mu + cutoffs)).T
         return pred
