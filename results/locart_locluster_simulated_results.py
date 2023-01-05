@@ -37,7 +37,7 @@ other_asym = False):
   mean_str, mean_diff, mean_coverage = "mean_interval_length", "mean_diff", "mean_coverage"
   
   # name of each method
-  methods = ["locluster", "locart", "icp", "wicp", "euclidean"]
+  methods = ["locluster", "locart", "icp", "wicp", "euclidean", "mondrian"]
   
   string_names = [median_str, median_diff, median_coverage, 
   mean_str, mean_diff, mean_coverage]
@@ -52,7 +52,8 @@ other_asym = False):
         kind, type_mod, d, ntrain[i])
       
       # list containing all data for n = ntrain[i]
-      data_list = [np.load(current_folder + "/" + string + "_n_{}_{}_data.npy".format(ntrain[i], kind)) for string in string_names]
+      data_list = [np.column_stack((np.load(current_folder + "/" + string + "_n_{}_{}_data.npy".format(ntrain[i], kind)),
+      np.load(current_folder + "/mondrian/" + string + "_n_{}_{}_data.npy".format(ntrain[i], kind)))) for string in string_names]
       
       # obtaining mean vectors in each matrix
       means_list = [np.mean(data, axis = 0) for data in data_list]
