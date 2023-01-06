@@ -19,11 +19,6 @@ import time
 
 # importing simulation
 original_path = os.getcwd()
-os.chdir(original_path + "/results")
-from simulation import simulation
-
-# returning to original path
-os.chdir(original_path)
   
   
 def compute_conformal_statistics(kind = "homoscedastic",
