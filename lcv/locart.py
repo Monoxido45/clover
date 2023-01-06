@@ -3,11 +3,13 @@ from __future__ import division
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.base import BaseEstimator, clone
+from copy import deepcopy
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeRegressor, plot_tree
+from sklearn.ensemble import RandomForestRegressor
 
-from lcv.scores import LocalRegressionScore, QuantileScore
+from lcv.scores import LocalRegressionScore, RegressionScore, QuantileScore
 
 
 class LocartSplit(BaseEstimator):
@@ -320,32 +322,41 @@ class MondrianRegressionSplit(BaseEstimator):
     def __init__(self, base_model, alpha, k=10, **kwargs):
         self.base_model = base_model
         self.k = k
-        self.nc_score = LocalRegressionScore(self.base_model, **kwargs)
+        self.nc_score = RegressionScore(self.base_model, **kwargs)
         self.alpha = alpha
 
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, **kwargs):
         # fitting the base model
         self.nc_score.fit(X_train, y_train)
+        # training RandomForestRegressor for difficulty estimation if base model is not RandomForest
+        if not isinstance(self.nc_score.base_model, RandomForestRegressor):
+            self.dif_model = RandomForestRegressor(**kwargs).fit(X_train, y_train)
+        else:
+            self.dif_model = deepcopy(self.nc_score.base_model)
+
         return self
 
     def calibrate(self, X_calib, y_calib, random_state=1250):
-        # computing first the local score
-        res = self.nc_score.compute(X_calib, y_calib, random_state=random_state)
+        # making the split
+        X_score, X_final, y_score, y_final = train_test_split(
+            X_calib, y_calib, test_size=0.5, random_state=random_state
+        )
 
-        # using vanilla score
-        res = self.nc_score.vanilla_res
+        # computing the difficulty score for each X_score
+        pred_dif = self.compute_difficulty(X_score)
+
+        # computing vanilla score in held out data
+        res = self.nc_score.compute(X_final, y_final)
 
         # now making local partitions based on variance percentile
-        # returning the predicted mad
-        pred_mad = self.nc_score.pred_mad
-
         # binning into k percentiles
         alphas = np.arange(1, self.k) / self.k
-        self.mondrian_quantiles = np.quantile(pred_mad, q=alphas, axis=0)
+        self.mondrian_quantiles = np.quantile(pred_dif, q=alphas, axis=0)
 
         # iterating percentiles to obtain local cutoffs
         # first obtaining interval index by apply function
-        int_idx = self.apply(pred_mad)
+        new_dif = self.compute_difficulty(X_final)
+        int_idx = self.apply(new_dif)
         self.mondrian_cutoffs = np.zeros(self.k)
 
         # obtaing all cutoffs
@@ -354,6 +365,16 @@ class MondrianRegressionSplit(BaseEstimator):
                 res[np.where(int_idx == i)], q=1 - self.alpha
             )
         return None
+
+    def compute_difficulty(self, X):
+        cart_pred = np.zeros((X.shape[0], len(self.dif_model.estimators_)))
+        i = 0
+        # computing the difficulty score for each X_score
+        for cart in self.dif_model.estimators_:
+            cart_pred[:, i] = cart.predict(X)
+            i += 1
+        # computing variance for each line
+        return cart_pred.var(1)
 
     def apply(self, mad):
         int_idx = np.zeros(mad.shape[0])
@@ -370,12 +391,12 @@ class MondrianRegressionSplit(BaseEstimator):
         # predicting mu
         pred_mu = self.nc_score.base_model.predict(X_test)
 
-        # prediciting mad
-        pred_mad = self.nc_score.mad_model.predict(X_test)
+        # prediciting difficulty
+        pred_dif = self.compute_difficulty(X_test)
 
-        # assigning different cutoffs based on mad
+        # assigning different cutoffs based on difficulty
         # first obtaining interval indexes
-        int_idx = self.apply(pred_mad)
+        int_idx = self.apply(pred_dif)
         cutoffs = self.mondrian_cutoffs[int_idx.astype(int)]
 
         pred = np.vstack((pred_mu - cutoffs, pred_mu + cutoffs)).T
