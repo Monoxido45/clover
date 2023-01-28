@@ -163,3 +163,7 @@ cython_debug/
 .Rhistory
 results/figures
 results/.ipynb_checkpoints
+
+# remove data 
+data/
+!scripts/data
