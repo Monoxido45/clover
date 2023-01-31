@@ -1,4 +1,5 @@
 import argparse
+import zipfile
 
 import pandas as pd
 from sklearn.datasets import load_svmlight_file
@@ -23,10 +24,59 @@ args = parser.parse_args()
 
 
 def process(dataset, n_samples=None, seed=0):
-    if dataset in ["cpusmall"]:
-        X, y = load_svmlight_file(f"data/raw/{dataset}/{dataset}")
-        data = pd.DataFrame(X.toarray())
-        data["target"] = pd.DataFrame(y)
+    # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadBlogData.m
+    if dataset == "blog":
+        with zipfile.ZipFile(f"data/raw/{dataset}/BlogFeedback.zip", "r") as file:
+            df = pd.read_csv(file.open("blogData_train.csv"))
+
+        X, y = df.iloc[:, :280], df.iloc[:, 281]
+        data = pd.DataFrame(X)
+        data["target"] = y
+
+    # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadProteinData.m
+    if dataset == "protein":
+        df = pd.read_csv(f"data/raw/protein/CASP.csv")
+        X, y = df.iloc[:, 1:], df.iloc[:, 0]
+        data = pd.DataFrame(X)
+        data["target"] = y
+
+    # Raise an error. Must install xlrd.
+    if dataset == "concrete":
+        df = pd.read_xml(f"data/raw/concrete/Concrete_Data.xls")
+        X, y = df.iloc[:, :8], df.iloc[:, 8]
+        data = pd.DataFrame(X)
+        data["target"] = y
+
+    if dataset == "news":
+        with zipfile.ZipFile(f"data/raw/news/OnlineNewsPopularity.zip", "r") as file:
+            df = pd.read_csv(file.open("OnlineNewsPopularity/OnlineNewsPopularity.csv"))
+
+        # First column are urls.
+        X, y = df.iloc[:, 1:60], df.iloc[:, 60]
+        data = pd.DataFrame(X)
+        data["target"] = y
+        pass
+
+    if dataset == "kernel":
+        pass
+
+    if dataset == "superconductivity":
+        pass
+
+    if dataset == "airfoil":
+        pass
+
+    if dataset == "electric":
+        pass
+
+    if dataset == "cycle":
+        pass
+
+    if dataset == "winered":
+        pass
+
+    if dataset == "winewhite":
+        pass
 
     return data
 
