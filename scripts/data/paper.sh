@@ -18,10 +18,10 @@ python scripts/data/process.py -d blog
 python scripts/data/process.py -d protein
 python scripts/data/process.py -d concrete
 python scripts/data/process.py -d news
-# python scripts/data/process.py -d kernel
-# python scripts/data/process.py -d superconductivity
-# python scripts/data/process.py -d airfoil
-# python scripts/data/process.py -d electric
-# python scripts/data/process.py -d cycle
-# python scripts/data/process.py -d winered
-# python scripts/data/process.py -d winewhite
+python scripts/data/process.py -d kernel
+python scripts/data/process.py -d superconductivity
+python scripts/data/process.py -d airfoil
+python scripts/data/process.py -d electric
+python scripts/data/process.py -d cycle
+python scripts/data/process.py -d winered
+python scripts/data/process.py -d winewhite

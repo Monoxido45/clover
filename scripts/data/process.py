@@ -26,10 +26,10 @@ args = parser.parse_args()
 def process(dataset, n_samples=None, seed=0):
     # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadBlogData.m
     if dataset == "blog":
-        with zipfile.ZipFile(f"data/raw/{dataset}/BlogFeedback.zip", "r") as file:
-            df = pd.read_csv(file.open("blogData_train.csv"))
+        with zipfile.ZipFile(f"data/raw/blog/BlogFeedback.zip", "r") as file:
+            df = pd.read_csv(file.open("blogData_train.csv"), header=None)
 
-        X, y = df.iloc[:, :280], df.iloc[:, 281]
+        X, y = df.iloc[:, :280], df.iloc[:, 280]
         data = pd.DataFrame(X)
         data["target"] = y
 
@@ -41,12 +41,14 @@ def process(dataset, n_samples=None, seed=0):
         data["target"] = y
 
     # Raise an error. Must install xlrd.
+    # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadConcreteData.m
     if dataset == "concrete":
-        df = pd.read_xml(f"data/raw/concrete/Concrete_Data.xls")
+        df = pd.read_excel(f"data/raw/concrete/Concrete_Data.xls")
         X, y = df.iloc[:, :8], df.iloc[:, 8]
         data = pd.DataFrame(X)
         data["target"] = y
 
+    # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadNewsData.m
     if dataset == "news":
         with zipfile.ZipFile(f"data/raw/news/OnlineNewsPopularity.zip", "r") as file:
             df = pd.read_csv(file.open("OnlineNewsPopularity/OnlineNewsPopularity.csv"))
@@ -55,28 +57,61 @@ def process(dataset, n_samples=None, seed=0):
         X, y = df.iloc[:, 1:60], df.iloc[:, 60]
         data = pd.DataFrame(X)
         data["target"] = y
-        pass
 
+    # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadKernelData.m
     if dataset == "kernel":
-        pass
+        with zipfile.ZipFile(f"data/raw/kernel/sgemm_product_dataset.zip", "r") as file:
+            df = pd.read_csv(file.open("sgemm_product.csv"))
 
+        # First column are urls.
+        X, y = df.iloc[:, :15], df.iloc[:, 15:].mean(axis=1)
+        data = pd.DataFrame(X)
+        data["target"] = y
+
+    # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadSuperconductorData.m
     if dataset == "superconductivity":
-        pass
+        with zipfile.ZipFile(
+            f"data/raw/superconductivity/superconduct.zip", "r"
+        ) as file:
+            df = pd.read_csv(file.open("train.csv"))
+
+        # First column are urls.
+        X, y = df.iloc[:, :81], df.iloc[:, 81]
+        data = pd.DataFrame(X)
+        data["target"] = y
 
     if dataset == "airfoil":
-        pass
+        df = pd.read_table(f"data/raw/airfoil/airfoil_self_noise.dat", header=None)
+        X, y = df.iloc[:, :5], df.iloc[:, 5]
+        data = pd.DataFrame(X)
+        data["target"] = y
 
     if dataset == "electric":
-        pass
+        df = pd.read_csv(f"data/raw/electric/Data_for_UCI_named.csv")
+        X, y = df.iloc[:, :12], df.iloc[:, 12]
+        data = pd.DataFrame(X)
+        data["target"] = y
 
     if dataset == "cycle":
-        pass
+        with zipfile.ZipFile(f"data/raw/cycle/CCPP.zip", "r") as file:
+            df = pd.read_excel(file.open("CCPP/Folds5x2_pp.xlsx"))
+
+        # First column are urls.
+        X, y = df.iloc[:, :4], df.iloc[:, 4]
+        data = pd.DataFrame(X)
+        data["target"] = y
 
     if dataset == "winered":
-        pass
+        df = pd.read_csv(f"data/raw/winered/winequality-red.csv", delimiter=";")
+        X, y = df.iloc[:, :11], df.iloc[:, 11]
+        data = pd.DataFrame(X)
+        data["target"] = y
 
     if dataset == "winewhite":
-        pass
+        df = pd.read_csv(f"data/raw/winewhite/winequality-white.csv", delimiter=";")
+        X, y = df.iloc[:, :11], df.iloc[:, 11]
+        data = pd.DataFrame(X)
+        data["target"] = y
 
     return data
 
