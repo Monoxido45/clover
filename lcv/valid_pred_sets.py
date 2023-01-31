@@ -341,29 +341,3 @@ class GradientBoostingQuantileRegression(BaseEstimator):
         upper = self.upper.predict(X)
         interval = np.vstack((lower, upper)).T
         return interval
-
-
-# random forest boosting quantile regression form conformal prediction
-class RandomForestQuantileRegression(BaseEstimator):
-    def __init__(self, coverage=0.05, **kwargs):
-        self.coverage = coverage
-        self.model = RandomForestRegressor(**kwargs)
-
-    def fit(self, X, y):
-        self.model.fit(X, y)
-        return self
-
-    def predict(self, X):
-        cart_data = np.zeros((X.shape[0], len(self.model.estimators_)))
-        i = 0
-
-        for cart in self.model.estimators_:
-            cart_data[:, i] = cart.predict(X)
-            i += 1
-
-        quantiles = [self.coverage / 2, 1 - self.coverage / 2]
-        lower = np.quantile(cart_data, quantiles[0], axis=1)
-        upper = np.quantile(cart_data, quantiles[1], axis=1)
-        intervals = np.vstack((lower, upper)).T
-
-        return intervals

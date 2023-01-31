@@ -271,7 +271,7 @@ class LocartSplit(BaseEstimator):
 class QuantileSplit(BaseEstimator):
     def __init__(self, base_model, alpha, **kwargs):
         self.base_model = base_model
-        self.nc_score = QuantileScore(self.base_model, coverage=alpha, **kwargs)
+        self.nc_score = QuantileScore(self.base_model, alpha = alpha, **kwargs)
         self.alpha = alpha
 
     def fit(self, X_train, y_train):
