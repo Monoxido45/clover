@@ -42,7 +42,7 @@ def GaussianKernelMatrix(x, sigma=1):
 
 
 def HSIC(x, y, s_x=1, s_y=1):
-    m, _ = x.shape  # sample size
+    m = x.shape[0]  # sample size
     K = GaussianKernelMatrix(x, s_x)
     L = GaussianKernelMatrix(y, s_y)
     H = np.identity(m) - 1.0 / m * np.ones((m, m))
@@ -139,7 +139,7 @@ def wsc_unbiased(
         coverage = np.mean(cover[idx])
         return coverage
 
-    X_train, X_test, y_train, y_test, pred_train, pred_test = train_test_split(
+    X_train, X_test2, y_train, y_test2, pred_train, pred_test = train_test_split(
         X_test, y_test, predictions, test_size=test_size, random_state=random_state
     )
     # Find adversarial parameters
@@ -153,8 +153,29 @@ def wsc_unbiased(
         verbose=verbose,
     )
     # Estimate coverage
-    coverage = wsc_vab(X_test, y_test, pred_test, v_star, a_star, b_star)
+    coverage = wsc_vab(X_test2, y_test2, pred_test, v_star, a_star, b_star)
     return coverage
+
+
+def wsc_coverage(
+    X_test,
+    y_test,
+    predictions,
+    delta=0.1,
+    M=1000,
+    test_size=0.75,
+    random_state=2020,
+    verbose=False,
+):
+    # worst slab coverage
+    wsc_value = wsc_unbiased(
+        X_test, y_test, predictions, delta, M, test_size, random_state, verbose
+    )
+    # marginal coverage
+    marg_coverage = np.mean(
+        np.logical_and(y_test >= predictions[:, 0], y_test <= predictions[:, 1]) + 0
+    )
+    return np.abs(wsc_value - marg_coverage)
 
 
 def ILS_coverage(predictions_1, predictions_2, y_test):
@@ -166,14 +187,14 @@ def ILS_coverage(predictions_1, predictions_2, y_test):
     ils_cover_1 = np.mean(
         np.logical_and(
             y_test[ils_idx] >= predictions_1[ils_idx, 0],
-            y_test <= predictions_1[ils_idx, 1],
+            y_test[ils_idx] <= predictions_1[ils_idx, 1],
         )
         + 0
     )
     ils_cover_2 = np.mean(
         np.logical_and(
             y_test[ils_idx] >= predictions_2[ils_idx, 0],
-            y_test <= predictions_2[ils_idx, 1],
+            y_test[ils_idx] <= predictions_2[ils_idx, 1],
         )
         + 0
     )
