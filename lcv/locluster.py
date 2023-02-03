@@ -103,7 +103,7 @@ class KmeansSplit(BaseEstimator):
 
             # obtaining scaled new X
             self.scaler = StandardScaler()
-            new_X = self.scaler.fit_transform(self.qmodel.predict(X_calib_train))
+            self.scaler.fit(self.qmodel.predict(X_calib_train))
 
             # predicting gbqr constructing test set to train k-means
             new_X_test = self.scaler.transform(self.qmodel.predict(X_calib_test))
@@ -117,7 +117,7 @@ class KmeansSplit(BaseEstimator):
                         .fit(new_X_test)
                         .labels_
                     )
-                    new_sil = silhouette_score(new_X, labels, metric="euclidean")
+                    new_sil = silhouette_score(new_X_test, labels, metric="euclidean")
                     if new_sil > current_sil:
                         current_sil = new_sil
                         current_k = k

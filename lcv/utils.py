@@ -210,13 +210,13 @@ def ILS_coverage(predictions_1, predictions_2, y_test):
 
 
 # split function
-def split(X, y, test_size=0.4, calibrate=True, random_seed=1250):
+def split(X, y, test_size=0.4, calib_size=0.5, calibrate=True, random_seed=1250):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_seed
     )
     if calibrate:
         X_train, X_calib, y_train, y_calib = train_test_split(
-            X_train, y_train, test_size=0.3, random_state=random_seed
+            X_train, y_train, test_size=calib_size, random_state=random_seed
         )
         return {
             "X_train": X_train,
