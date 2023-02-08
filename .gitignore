@@ -167,3 +167,6 @@ results/.ipynb_checkpoints
 # remove data 
 data/
 !scripts/data
+
+# figures in examples
+/examples/figures/
