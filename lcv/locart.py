@@ -153,7 +153,7 @@ class LocartSplit(BaseEstimator):
     def prune_tree(self, X_train, X_valid, res_train, res_valid):
         prune_path = self.cart.cost_complexity_pruning_path(X_train, res_train)
         ccp_alphas = prune_path.ccp_alphas
-        current_loss = 1000
+        current_loss = float("inf")
         # cross validation by data splitting to choose alphas
         for ccp_alpha in ccp_alphas:
             preds_ccp = (
@@ -271,7 +271,7 @@ class LocartSplit(BaseEstimator):
 class QuantileSplit(BaseEstimator):
     def __init__(self, base_model, alpha, **kwargs):
         self.base_model = base_model
-        self.nc_score = QuantileScore(self.base_model, alpha = alpha, **kwargs)
+        self.nc_score = QuantileScore(self.base_model, alpha=alpha, **kwargs)
         self.alpha = alpha
 
     def fit(self, X_train, y_train):
