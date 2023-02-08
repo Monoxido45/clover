@@ -67,9 +67,7 @@ def wsc(
 
     def wsc_v(X_test, y_test, predictions, delta, v):
         n = len(y_test)
-        cover = (
-            np.logical_and(y_test >= predictions[:, 0], y_test <= predictions[:, 1]) + 0
-        )
+        cover = np.logical_and(y_test >= predictions[:, 0], y_test <= predictions[:, 1])
         z = np.dot(X_test, v)
 
         # Compute mass
@@ -131,9 +129,7 @@ def wsc_unbiased(
     verbose=False,
 ):
     def wsc_vab(X_test, y_test, predictions, v, a, b):
-        cover = (
-            np.logical_and(y_test >= predictions[:, 0], y_test <= predictions[:, 1]) + 0
-        )
+        cover = np.logical_and(y_test >= predictions[:, 0], y_test <= predictions[:, 1])
         z = np.dot(X_test, v)
         idx = np.where((z >= a) * (z <= b))
         coverage = np.mean(cover[idx])
