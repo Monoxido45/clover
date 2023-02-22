@@ -12,6 +12,7 @@ from sklearn.ensemble import (
     RandomForestClassifier,
     RandomForestRegressor,
 )
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import QuantileRegressor
 from sklearn.model_selection import train_test_split
 
@@ -63,19 +64,23 @@ class Valid_pred_sets(BaseEstimator):
       already calibrated Conformal Prediction model from noncoformist package or any model with predict method
     alpha: float between 0 and 1
       significance level for testing
-    coverage evaluator: string or Sklearn model
-      which coverage evaluator to use: random forest (RF), neural networks (nnet), gam (GAM) or any sklearn model class.
-      If None, the classifier is chosen according to a binary crossentropy value in a holdout validation set
+    coverage evaluator: string
+      which coverage evaluator to use: for now, using only Regression Trees (CART), Random Forest (RF), Generalized additive models (GAM) and neural networks (nnet)
     """
 
-    def __init__(self, conf, alpha, coverage_evaluator="RF"):
+    def __init__(self, conf, alpha, isnc=False, coverage_evaluator="CART"):
         self.conf = conf
         self.alpha = alpha
+        self.nc = isnc
         self.coverage_evaluator = coverage_evaluator
 
     def fit(self, X_calib, y_calib, random_seed=1250, test_size=0.2, **kwargs):
         # predicting each interval
-        preds = self.conf.predict(X_calib, significance=self.alpha)
+        if self.nc:
+            preds = self.conf.predict(X_calib, significance=self.alpha)
+        else:
+            preds = self.conf.predict(X_calib)
+
         np.random.seed(random_seed)
         # obtaining each w
         w = np.zeros(y_calib.shape[0])
@@ -96,7 +101,13 @@ class Valid_pred_sets(BaseEstimator):
         random_seed: Random seed provided
         **kwargs: Arguments passed to it correspondent coverage evaluator model
         """
-        if self.coverage_evaluator == "RF":
+        if self.coverage_evaluator == "CART":
+            self.model = (
+                DecisionTreeClassifier(min_samples_leaf=100)
+                .set_params(**kwargs)
+                .fit(self.X_train, self.w_train)
+            )
+        elif self.coverage_evaluator == "RF":
             self.model = RandomForestClassifier(**kwargs).fit(
                 self.X_train, self.w_train
             )
@@ -160,10 +171,14 @@ class Valid_pred_sets(BaseEstimator):
     # new_r = self.retrain(self.X_train, new_w, self.X_test)
     # return np.mean(np.abs(new_r - (1 - self.alpha)))
 
-    def monte_carlo_test(self, B=1000, random_seed=1250, par=False):
-        # observed statistic
+    def compute_dif(self):
         r = self.predict(self.X_test)
         t_obs = np.mean(np.abs(r - (1 - self.alpha)))
+        return t_obs
+
+    def monte_carlo_test(self, B=1000, random_seed=1250, par=False):
+        # observed statistic
+        t_obs = self.compute_dif()
 
         # computing monte-carlo samples
         np.random.seed(random_seed)
