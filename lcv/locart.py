@@ -8,6 +8,9 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeRegressor, plot_tree
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
+import scipy.stats as st
+import inspect
 
 from lcv.scores import LocalRegressionScore, RegressionScore, QuantileScore
 
@@ -52,23 +55,19 @@ class LocartSplit(BaseEstimator):
         self.cart_type = cart_type
         self.split_calib = split_calib
 
-    def fit(self, X, y):
+    def fit(self, X, y, mad_model_cte=False):
         """
         Fit non conformity score to training samples
         --------------------------------------------------------
         X: Feature matrix
         y: label for training samples
         """
-        # saving minimum and maximum for y
-        self.min_y, self.max_y = (np.min(y) - 3), (np.max(y) + 3)
-        self.nc_score.fit(X, y)
+        fun_args = inspect.getfullargspec(self.nc_score.fit).args
+        if "mad_model_cte" in fun_args:
+            self.nc_score.fit(X, y, mad_model_cte=mad_model_cte)
+        else:
+            self.nc_score.fit(X, y)
         return self
-
-    def update_limits(self, value_min, value_max):
-        if value_min < self.min_y:
-            self.min_y = value_min
-        if value_max > self.max_y:
-            self.max_y = value_max
 
     def calib(
         self,
@@ -77,6 +76,10 @@ class LocartSplit(BaseEstimator):
         random_seed=1250,
         prune_tree=True,
         prune_seed=780,
+        cart_train_size=0.5,
+        random_projections=False,
+        m=1000,
+        projections_seed=1250,
         **kwargs
     ):
         """
@@ -92,13 +95,45 @@ class LocartSplit(BaseEstimator):
             If prune_tree = True, random seed for data splitting to prune
         """
         res = self.nc_score.compute(X_calib, y_calib)
-        # update min and maximum in y
-        self.update_limits(np.min(y_calib), np.max(y_calib))
 
         # splitting calibration data into a training half and a validation half
-        X_calib_train, X_calib_test, res_calib_train, res_calib_test = train_test_split(
-            X_calib, res, test_size=0.5, random_state=random_seed
-        )
+        if self.split_calib:
+            (
+                X_calib_train,
+                X_calib_test,
+                res_calib_train,
+                res_calib_test,
+            ) = train_test_split(
+                X_calib, res, test_size=1 - cart_train_size, random_state=random_seed
+            )
+            if random_projections:
+                self.rp = True
+                self.rp_args = [m, projections_seed]
+                self.rp_scaler = StandardScaler()
+                X_calib_train = self.add_random_projections(
+                    self.rp_scaler.fit_transform(X_calib_train),
+                    m=m,
+                    random_seed=projections_seed,
+                )
+                X_calib_test = self.add_random_projections(
+                    self.rp_scaler.transform(X_calib_test),
+                    m=m,
+                    random_seed=projections_seed,
+                )
+            else:
+                self.rp = False
+        else:
+            if random_projections:
+                self.rp = True
+                self.rp_args = [m, projections_seed]
+                self.rp_scaler = StandardScaler()
+                X_calib = self.add_random_projections(
+                    self.rp_scaler.fit_transform(X_calib),
+                    m=m,
+                    random_seed=projections_seed,
+                )
+            else:
+                self.rp = False
 
         if self.cart_type == "CART":
             # declaring decision tree
@@ -107,17 +142,28 @@ class LocartSplit(BaseEstimator):
             ).set_params(**kwargs)
             # obtaining optimum alpha to prune decision tree
             if prune_tree:
-                (
-                    X_train_prune,
-                    X_test_prune,
-                    res_train_prune,
-                    res_test_prune,
-                ) = train_test_split(
-                    X_calib_train,
-                    res_calib_train,
-                    test_size=0.5,
-                    random_state=prune_seed,
-                )
+                if self.split_calib:
+                    (
+                        X_train_prune,
+                        X_test_prune,
+                        res_train_prune,
+                        res_test_prune,
+                    ) = train_test_split(
+                        X_calib_train,
+                        res_calib_train,
+                        test_size=0.5,
+                        random_state=prune_seed,
+                    )
+                else:
+                    (
+                        X_train_prune,
+                        X_test_prune,
+                        res_train_prune,
+                        res_test_prune,
+                    ) = train_test_split(
+                        X_calib, res, test_size=0.5, random_state=prune_seed,
+                    )
+
                 optim_ccp = self.prune_tree(
                     X_train_prune, X_test_prune, res_train_prune, res_test_prune
                 )
@@ -149,6 +195,14 @@ class LocartSplit(BaseEstimator):
         # TODO: implement RFCDE version
 
         return self.cutoffs
+
+    def make_random_projections(self, X, m=1000, random_seed=1250):
+        # generating random normal coefficients in S
+        np.random.seed(random_seed)
+        d = X.shape[1]
+        S = np.random.standard_normal(size=(m, d)) / np.sqrt(m)
+        projections = np.dot(X, S.transpose())
+        return np.concatenate((X, projections), axis=1)
 
     def prune_tree(self, X_train, X_valid, res_train, res_valid):
         prune_path = self.cart.cost_complexity_pruning_path(X_train, res_train)
@@ -217,55 +271,34 @@ class LocartSplit(BaseEstimator):
             plt.title("Decision Tree fitted to non-conformity score")
             plt.show()
 
-    def predict(self, X, length=1500, type_model="CART"):
+    def predict(self, X, type_model="CART"):
         """
         Predict $1 - \alpha$ prediction region for each test sample using LocartSplit local cutoff points
         """
-        y_grid = np.linspace(self.min_y, self.max_y, length)
-        intervals_list = []
-        for i in range(X.shape[0]):
-            # computing residual for all the grid
-            res = self.nc_score.compute(X[i, :].reshape(1, -1), y_grid)
-            # obtaining cutoff indexes and cutoff points according to choosed type of model
-            if type_model == "CART":
-                cutoff_idx = np.where(
-                    self.leaf_idx == self.cart.apply(X[i, :].reshape(1, -1))
-                )[0][0]
-                # finding interval/region limits
-                ident_int = np.diff((res <= self.cutoffs[cutoff_idx]) + 0)
-
-            elif type_model == "euclidean":
-                # obtaining X cutoff index
-                cutoff_idx = np.where(
-                    self.cartesian_ints == self.uniform_apply(X[i, :].reshape(1, -1))
-                )[0][0]
-                # finding interval/region limits
-                ident_int = np.diff((res <= self.unif_cutoffs[cutoff_idx]) + 0)
-
-            ident_idx = np.where(ident_int != 0)[0]
-
-            if len(ident_idx) == 0 and self.base_model_type == True:
-                intervals_list.append(
-                    self.base_model.predict(X[i, :].reshape(1, -1)).flatten()
+        # identifying cutoff point
+        if type_model == "CART":
+            if self.rp:
+                X = self.make_random_projections(
+                    self.rp_scaler.transform(X),
+                    m=self.rp_args[0],
+                    random_seed=self.rp_args[1],
                 )
-            elif len(ident_idx) == 0 and self.base_model_type is None:
-                intervals_list.append(np.array([self.min_y, self.max_y]))
-            else:
-                # -1 indicates end of the invervals and 1 the beggining
-                # if we start the identifier with -1, that means the first entry is the beggining
-                if ident_int[ident_idx[0]] == -1:
-                    ident_idx = np.insert(ident_idx, 0, -1)
-                # if we finish with 0, that means the last entry is the end
-                if ident_int[ident_idx[-1]] == 1:
-                    ident_idx = np.append(ident_idx, y_grid.shape[0] - 1)
 
-                # after turning the array even shaped we add one to the lower limit of intervals
-                int_idx = ident_idx + np.tile(
-                    np.array([1, 0]), int(ident_idx.shape[0] / 2)
-                )
-                intervals_list.append(y_grid[int_idx])
+            leaves_idx = self.cart.apply(X)
+            # obtaining order of leaves
+            cutoffs = self.cutoffs[
+                st.rankdata(leaves_idx.astype(int), method="dense") - 1
+            ]
+            pred = self.nc_score.predict(X, cutoffs)
 
-        return np.array(intervals_list)
+        elif type_model == "euclidean":
+            idx = self.uniform_apply(X)
+            cutoffs = self.unif_cutoffs[
+                st.rankdata(idx.astype(int), method="dense") - 1
+            ]
+            pred = self.nc_score.predict(X, cutoffs)
+
+        return pred
 
 
 class QuantileSplit(BaseEstimator):
@@ -284,11 +317,7 @@ class QuantileSplit(BaseEstimator):
         return None
 
     def predict(self, X_test):
-        quantiles = self.nc_score.base_model.predict(X_test)
-        pred = np.vstack(
-            (quantiles[:, 0] - self.cutoff, quantiles[:, 1] + self.cutoff)
-        ).T
-        return pred
+        return self.nc_score.predict(X_test, self.cutoff)
 
 
 # Local regression split proposed by Lei et al
@@ -298,23 +327,18 @@ class LocalRegressionSplit(BaseEstimator):
         self.nc_score = LocalRegressionScore(self.base_model, **kwargs)
         self.alpha = alpha
 
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, mad_model_cte=False):
         # fitting the base model
-        self.nc_score.fit(X_train, y_train)
+        self.nc_score.fit(X_train, y_train, mad_model_cte=mad_model_cte)
         return self
 
-    def calibrate(self, X_calib, y_calib, random_state=1250):
-        res = self.nc_score.compute(X_calib, y_calib, random_state=random_state)
+    def calibrate(self, X_calib, y_calib):
+        res = self.nc_score.compute(X_calib, y_calib)
         self.cutoff = np.quantile(res, q=1 - self.alpha)
         return None
 
     def predict(self, X_test):
-        pred_mu = self.nc_score.base_model.predict(X_test)
-        pred_mad = self.nc_score.mad_model.predict(X_test)
-        pred = np.vstack(
-            (pred_mu - (pred_mad * self.cutoff), pred_mu + (pred_mad * self.cutoff))
-        ).T
-        return pred
+        return self.nc_score.predict(X_test, self.cutoff)
 
 
 # Mondrian split method proposed by Bostrom et al
@@ -388,9 +412,6 @@ class MondrianRegressionSplit(BaseEstimator):
         return int_idx
 
     def predict(self, X_test):
-        # predicting mu
-        pred_mu = self.nc_score.base_model.predict(X_test)
-
         # prediciting difficulty
         pred_dif = self.compute_difficulty(X_test)
 
@@ -399,5 +420,4 @@ class MondrianRegressionSplit(BaseEstimator):
         int_idx = self.apply(pred_dif)
         cutoffs = self.mondrian_cutoffs[int_idx.astype(int)]
 
-        pred = np.vstack((pred_mu - cutoffs, pred_mu + cutoffs)).T
-        return pred
+        return self.nc_score.predict(X_test, cutoffs)

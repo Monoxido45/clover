@@ -19,6 +19,10 @@ class Scores(ABC):
     def compute(self, X_calib, y_calib):
         pass
 
+    @abstractmethod
+    def predict(self, X_test, cutoff):
+        pass
+
 
 # two main non conformity scores
 # regression score
@@ -45,6 +49,11 @@ class RegressionScore(Scores):
         else:
             return np.abs(y_calib)
 
+    def predict(self, X_test, cutoff):
+        pred_mu = self.base_model.predict(X_test)
+        pred = np.vstack((pred_mu - cutoff, pred_mu + cutoff)).T
+        return pred
+
 
 # local rgression score
 class LocalRegressionScore(Scores):
@@ -55,29 +64,47 @@ class LocalRegressionScore(Scores):
         Base-model that will be used to compute non-conformity scores
     """
 
-    def fit(self, X, y):
+    def fit(self, X, y, mad_model_cte=False):
         # fitting regression to all training set
         self.base_model.fit(X, y)
+
+        # training mad model
+        if mad_model_cte:
+            self.mad_model_cte = True
+        else:
+            self.mad_model_cte = False
+            res_model = np.abs(y - self.base_model.predict(X))
+            self.mad_model = clone(self.base_model).fit(X, res_model)
+
         return self
 
-    def compute(self, X_calib, y_calib, random_state=1250):
-        # splitting calibration set into two equal sized sets, one for training mad estimator, the other to compute residuals
-        X_res, X_mad, y_res, y_mad = train_test_split(
-            X_calib, y_calib, test_size=0.5, random_state=random_state
-        )
+    def compute(self, X_calib, y_calib):
+        pred_reg = self.base_model.predict(X_calib)
+        if self.mad_model_cte:
+            res = np.abs(pred_reg - y_calib)
+            return res
 
-        res_model = np.abs(y_mad - self.base_model.predict(X_mad))
-        self.mad_model = clone(self.base_model).fit(X_mad, res_model)
+        else:
+            res_model = np.abs(y_calib - pred_reg)
+            pred_mad = self.mad_model.predict(X_calib)
 
-        pred_reg = self.base_model.predict(X_res)
-        pred_mad = self.mad_model.predict(X_res)
+            # saving mad and vanilla res to objects if needed
+            self.pred_mad = pred_mad
+            self.vanilla_res = np.abs(pred_reg - y_calib)
 
-        # saving mad and vanilla res to objects if needed
-        self.pred_mad = pred_mad
-        self.vanilla_res = np.abs(pred_reg - y_res)
+            res = res_model / pred_mad
+            return res
 
-        res = np.abs(pred_reg - y_res) / pred_mad
-        return res
+    def predict(self, X_test, cutoff):
+        pred_mu = self.base_model.predict(X_test)
+        if not self.mad_model_cte:
+            pred_mad = self.mad_model.predict(X_test)
+            pred = np.vstack(
+                (pred_mu - (pred_mad * cutoff), pred_mu + (pred_mad * cutoff))
+            ).T
+        else:
+            pred = np.vstack((pred_mu - cutoff, pred_mu + cutoff)).T
+        return pred
 
 
 # quantile score
@@ -99,3 +126,8 @@ class QuantileScore(Scores):
         scores = np.column_stack((pred[:, 0] - y_calib, y_calib - pred[:, 1]))
         res = np.max(scores, axis=1)
         return res
+
+    def predict(self, X_test, cutoff):
+        quantiles = self.nc_score.base_model.predict(X_test)
+        pred = np.vstack((quantiles[:, 0] - cutoff, quantiles[:, 1] + cutoff)).T
+        return pred

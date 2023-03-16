@@ -53,16 +53,8 @@ class KmeansSplit(BaseEstimator):
         y: label for training samples
         """
         # saving minimum and maximum for y
-        self.min_y, self.max_y = (np.min(y) - 3), (np.max(y) + 3)
         self.nc_score.fit(X, y)
         return self
-
-    def update_limits(self, value_min, value_max):
-        if value_min < self.min_y:
-            self.min_y = value_min
-        if value_max > self.max_y:
-            self.max_y = value_max
-
     def calib(
         self,
         X_calib,
@@ -86,8 +78,6 @@ class KmeansSplit(BaseEstimator):
         **kwargs: keyword arguments to be passed to quantile gradient boosting ensemble
         """
         res = self.nc_score.compute(X_calib, y_calib)
-        # update min and maximum in y
-        self.update_limits(np.min(y_calib), np.max(y_calib))
 
         # splitting calibration data into a training half and a validation half
         X_calib_train, X_calib_test, res_calib_train, res_calib_test = train_test_split(
@@ -147,50 +137,17 @@ class KmeansSplit(BaseEstimator):
     def apply(self, X):
         return self.kmeans.predict(X)
 
-    def predict(self, X, length=1500):
+    def predict(self, X):
         """
         Predict $1 - \alpha$ prediction region for each test sample using LocartSplit local cutoff points
         """
-        y_grid = np.linspace(self.min_y, self.max_y, length)
-        intervals_list = []
         # first obtaining new quantile matrix from X
         new_X = self.scaler.transform(self.qmodel.predict(X))
-        for i in range(X.shape[0]):
-            # computing residual for all the grid
-            res = self.nc_score.compute(X[i, :].reshape(1, -1), y_grid)
+        # obtaining cutoffs
+        cutoff_idx = self.apply(new_X)
+        cutoffs = self.cutoffs[cutoff_idx.astype(int)]
 
-            # obtaining cutoff indexes and cutoff points according to chosen type of model
-            cutoff_idx = np.where(
-                self.groups_idx == self.apply(new_X[i, :].reshape(1, -1))
-            )[0][0]
-
-            # finding interval/region limits
-            ident_int = np.diff((res <= self.cutoffs[cutoff_idx]).astype(np.int32))
-            ident_idx = np.where(ident_int != 0)[0]
-
-            # TODO: this is a provisional solution.
-            if len(ident_idx) == 0 and self.base_model_type == True:
-                intervals_list.append(
-                    self.base_model.predict(X[i, :].reshape(1, -1)).flatten()
-                )
-            elif len(ident_idx) == 0 and self.base_model_type is None:
-                intervals_list.append(np.array([self.min_y, self.max_y]))
-            else:
-                # -1 indicates end of the invervals and 1 the beggining
-                # if we start the identifier with -1, that means the first entry is the beggining
-                if ident_int[ident_idx[0]] == -1:
-                    ident_idx = np.insert(ident_idx, 0, -1)
-                # if we finish with 0, that means the last entry is the end
-                if ident_int[ident_idx[-1]] == 1:
-                    ident_idx = np.append(ident_idx, y_grid.shape[0] - 1)
-
-                # after turning the array even shaped we add one to the lower limit of intervals
-                int_idx = ident_idx + np.tile(
-                    np.array([1, 0]), int(ident_idx.shape[0] / 2)
-                )
-                intervals_list.append(y_grid[int_idx])
-
-        return np.array(intervals_list)
+        return self.nc_score.predict(X, cutoffs)
 
 
 # gradient boosting to compute several quantiles
