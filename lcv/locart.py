@@ -108,29 +108,30 @@ class LocartSplit(BaseEstimator):
             )
             if random_projections:
                 self.rp = True
-                self.rp_args = [m, projections_seed]
+                np.random.seed(projections_seed)
+                self.S_matrix = np.random.standard_normal(
+                    (m, X_calib_train.shape[1])
+                ) / np.sqrt(m)
                 self.rp_scaler = StandardScaler()
                 X_calib_train = self.add_random_projections(
-                    self.rp_scaler.fit_transform(X_calib_train),
-                    m=m,
-                    random_seed=projections_seed,
+                    self.rp_scaler.fit_transform(X_calib_train)
                 )
                 X_calib_test = self.add_random_projections(
-                    self.rp_scaler.transform(X_calib_test),
-                    m=m,
-                    random_seed=projections_seed,
+                    self.rp_scaler.transform(X_calib_test)
                 )
             else:
                 self.rp = False
         else:
             if random_projections:
                 self.rp = True
+                np.random.seed(projections_seed)
+                self.S_matrix = np.random.standard_normal(
+                    (m, X_calib_train.shape[1])
+                ) / np.sqrt(m)
                 self.rp_args = [m, projections_seed]
                 self.rp_scaler = StandardScaler()
                 X_calib = self.add_random_projections(
-                    self.rp_scaler.fit_transform(X_calib),
-                    m=m,
-                    random_seed=projections_seed,
+                    self.rp_scaler.fit_transform(X_calib)
                 )
             else:
                 self.rp = False
@@ -196,12 +197,8 @@ class LocartSplit(BaseEstimator):
 
         return self.cutoffs
 
-    def make_random_projections(self, X, m=1000, random_seed=1250):
-        # generating random normal coefficients in S
-        np.random.seed(random_seed)
-        d = X.shape[1]
-        S = np.random.standard_normal(size=(m, d)) / np.sqrt(m)
-        projections = np.dot(X, S.transpose())
+    def make_random_projections(self, X):
+        projections = np.dot(X, self.S_matrix.transpose())
         return np.concatenate((X, projections), axis=1)
 
     def prune_tree(self, X_train, X_valid, res_train, res_valid):
@@ -278,11 +275,7 @@ class LocartSplit(BaseEstimator):
         # identifying cutoff point
         if type_model == "CART":
             if self.rp:
-                X = self.make_random_projections(
-                    self.rp_scaler.transform(X),
-                    m=self.rp_args[0],
-                    random_seed=self.rp_args[1],
-                )
+                X = self.make_random_projections(self.rp_scaler.transform(X))
 
             leaves_idx = self.cart.apply(X)
             # obtaining order of leaves
