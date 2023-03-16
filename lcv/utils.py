@@ -555,6 +555,18 @@ def ILS_coverage(predictions_1, predictions_2, y_test):
     return delta_ils_1 - delta_ils_2
 
 
+# implementing the standard interval score
+def smis(predictions, y_test, alpha):
+    int_length = compute_interval_length(predictions)
+    is_alpha = -(
+        int_length
+        + (2 / alpha * (predictions[:, 0] - y_test) * (y_test < predictions[:, 0]))
+        + (2 / alpha * (y_test - predictions[:, 1]) * (y_test > predictions[:, 1]))
+    )
+
+    return np.mean(is_alpha)
+
+
 # split function
 def split(X, y, test_size=0.4, calib_size=0.5, calibrate=True, random_seed=1250):
     X_train, X_test, y_train, y_test = train_test_split(

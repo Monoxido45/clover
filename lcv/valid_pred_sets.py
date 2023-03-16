@@ -12,6 +12,7 @@ from sklearn.ensemble import (
     RandomForestClassifier,
     RandomForestRegressor,
 )
+from sklearn.metrics import brier_score_loss
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import QuantileRegressor
 from sklearn.model_selection import train_test_split
@@ -66,20 +67,32 @@ class Valid_pred_sets(BaseEstimator):
       significance level for testing
     coverage evaluator: string
       which coverage evaluator to use: for now, using only Regression Trees (CART), Random Forest (RF), Generalized additive models (GAM) and neural networks (nnet)
+    prune: bool
+      whether to prune or not the regression tree coverage evaluator. Works only if coverage_evaluator = "CART"
     """
 
-    def __init__(self, conf, alpha, isnc=False, coverage_evaluator="CART"):
+    def __init__(self, conf, alpha, isnc=False, coverage_evaluator="CART", prune=True, split_train = True):
         self.conf = conf
         self.alpha = alpha
         self.nc = isnc
         self.coverage_evaluator = coverage_evaluator
+        self.prune = prune
+        self.split_train = split_train
 
-    def fit(self, X_calib, y_calib, random_seed=1250, test_size=0.2, **kwargs):
+    def fit(
+        self,
+        X_calib,
+        y_calib,
+        random_seed=1250,
+        prune_seed=650,
+        test_size=0.2,
+        **kwargs
+    ):
         # predicting each interval
         if self.nc:
             preds = self.conf.predict(X_calib, significance=self.alpha)
         else:
-            preds = self.conf.predict(X_calib)
+            preds = np.array(self.conf.predict(X_calib))
 
         np.random.seed(random_seed)
         # obtaining each w
@@ -87,14 +100,19 @@ class Valid_pred_sets(BaseEstimator):
         for i in range(y_calib.shape[0]):
             w[i] = int(y_calib[i] >= preds[i, 0] and y_calib[i] <= preds[i, 1])
         # splitting training and testing sets
-        self.X_train, self.X_test, self.w_train, self.w_test = train_test_split(
+        if self.split_train:
+            self.X_train, self.X_test, self.w_train, self.w_test = train_test_split(
             X_calib, w, test_size=test_size
         )
+        else:
+            self.X_train, self.w_train = X_calib, w
 
         # regressing w on x using select coverage evaluator model
-        return self._init_coverage_evaluator(random_seed=random_seed, **kwargs)
+        return self._init_coverage_evaluator(
+            random_seed=random_seed, prune_seed=prune_seed, **kwargs
+        )
 
-    def _init_coverage_evaluator(self, random_seed, **kwargs):
+    def _init_coverage_evaluator(self, random_seed, prune_seed, **kwargs):
         """
         Coverage evaluator initializer
         -----------
@@ -102,11 +120,32 @@ class Valid_pred_sets(BaseEstimator):
         **kwargs: Arguments passed to it correspondent coverage evaluator model
         """
         if self.coverage_evaluator == "CART":
-            self.model = (
-                DecisionTreeClassifier(min_samples_leaf=100)
-                .set_params(**kwargs)
-                .fit(self.X_train, self.w_train)
-            )
+            self.model = DecisionTreeClassifier(
+                random_state=random_seed, min_samples_leaf=100
+            ).set_params(**kwargs)
+            if self.prune:
+                (
+                    X_train_prune,
+                    X_test_prune,
+                    w_train_prune,
+                    w_test_prune,
+                ) = train_test_split(
+                    self.X_train, self.w_train, test_size=0.5, random_state=prune_seed,
+                )
+                optim_ccp = self.prune_tree(
+                    X_train_prune, X_test_prune, w_train_prune, w_test_prune
+                )
+                # pruning decision tree
+                self.model.set_params(ccp_alpha=optim_ccp).fit(
+                    self.X_train, self.w_train
+                )
+
+            else:
+                self.model = (
+                    DecisionTreeClassifier(min_samples_leaf=100)
+                    .set_params(**kwargs)
+                    .fit(self.X_train, self.w_train)
+                )
         elif self.coverage_evaluator == "RF":
             self.model = RandomForestClassifier(**kwargs).fit(
                 self.X_train, self.w_train
@@ -127,6 +166,25 @@ class Valid_pred_sets(BaseEstimator):
                 self.X_train, self.w_train
             )
         return self
+
+    def prune_tree(self, X_train, X_valid, w_train, w_valid):
+        prune_path = self.model.cost_complexity_pruning_path(X_train, w_train)
+        ccp_alphas = prune_path.ccp_alphas
+        current_loss = float("inf")
+        # cross validation by data splitting to choose alphas
+        for ccp_alpha in ccp_alphas:
+            preds_ccp = (
+                clone(self.model)
+                .set_params(ccp_alpha=ccp_alpha)
+                .fit(X_train, w_train)
+                .predict(X_valid)
+            )
+            loss_ccp = brier_score_loss(w_valid, preds_ccp)
+            if loss_ccp < current_loss:
+                current_loss = loss_ccp
+                optim_ccp = ccp_alpha
+
+        return optim_ccp
 
     def predict(self, X_test):
         if self.coverage_evaluator == "RF" or "sklearn" in str(type((self.model))):
@@ -172,9 +230,13 @@ class Valid_pred_sets(BaseEstimator):
     # return np.mean(np.abs(new_r - (1 - self.alpha)))
 
     def compute_dif(self):
-        r = self.predict(self.X_test)
+        if self.split_train:
+            r = self.predict(self.X_test)
+        else:
+            r = self.predict(self.X_train)
         t_obs = np.mean(np.abs(r - (1 - self.alpha)))
-        return t_obs
+        t_max = np.max(np.abs(r - (1 - self.alpha)))
+        return t_obs, t_max
 
     def monte_carlo_test(self, B=1000, random_seed=1250, par=False):
         # observed statistic
