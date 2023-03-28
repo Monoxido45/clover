@@ -71,10 +71,20 @@ class Valid_pred_sets(BaseEstimator):
       whether to prune or not the regression tree coverage evaluator. Works only if coverage_evaluator = "CART"
     """
 
-    def __init__(self, conf, alpha, isnc=False, coverage_evaluator="CART", prune=True, split_train = True):
+    def __init__(
+        self,
+        conf,
+        alpha,
+        isnc=False,
+        islcp=False,
+        coverage_evaluator="CART",
+        prune=True,
+        split_train=True,
+    ):
         self.conf = conf
         self.alpha = alpha
         self.nc = isnc
+        self.islcp = islcp
         self.coverage_evaluator = coverage_evaluator
         self.prune = prune
         self.split_train = split_train
@@ -91,6 +101,8 @@ class Valid_pred_sets(BaseEstimator):
         # predicting each interval
         if self.nc:
             preds = self.conf.predict(X_calib, significance=self.alpha)
+        elif self.islcp:
+            preds = np.stack((self.conf.predict_pi(X_calib, method="qrf")), axis=-1)
         else:
             preds = np.array(self.conf.predict(X_calib))
 
@@ -102,8 +114,8 @@ class Valid_pred_sets(BaseEstimator):
         # splitting training and testing sets
         if self.split_train:
             self.X_train, self.X_test, self.w_train, self.w_test = train_test_split(
-            X_calib, w, test_size=test_size
-        )
+                X_calib, w, test_size=test_size
+            )
         else:
             self.X_train, self.w_train = X_calib, w
 
