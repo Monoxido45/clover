@@ -9,8 +9,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeRegressor, plot_tree
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
+from operator import itemgetter
 import scipy.stats as st
-import inspect
 
 from lcv.scores import LocalRegressionScore, RegressionScore, QuantileScore
 
@@ -27,7 +27,7 @@ class LocartSplit(BaseEstimator):
     base_model_type: Bool
       Boolean indicating wether interval prediction base_model is being used or not. Default is None
     cart_type: string
-      Which CART algorithm should be fitted. For now it is between "CART" and "RFCDE"
+      Which CART algorithm should be fitted. For now it is between "CART" and "RF"
     split_calib: bool
       Boolean indicating whether we split the calibration set into training and test set. Default is True
     **kwargs: keyword arguments passed to fit base_model
@@ -41,6 +41,7 @@ class LocartSplit(BaseEstimator):
         base_model_type=None,
         cart_type="CART",
         split_calib=True,
+        weighting=False,
         **kwargs
     ):
 
@@ -54,19 +55,21 @@ class LocartSplit(BaseEstimator):
         self.alpha = alpha
         self.cart_type = cart_type
         self.split_calib = split_calib
+        self.weighting = weighting
 
-    def fit(self, X, y, mad_model_cte=False):
+    def fit(self, X, y, **kwargs):
         """
         Fit non conformity score to training samples
         --------------------------------------------------------
         X: Feature matrix
         y: label for training samples
         """
-        fun_args = inspect.getfullargspec(self.nc_score.fit).args
-        if "mad_model_cte" in fun_args:
-            self.nc_score.fit(X, y, mad_model_cte=mad_model_cte)
-        else:
-            self.nc_score.fit(X, y)
+        self.nc_score.fit(X, y)
+        if self.weighting == True:
+            if not isinstance(self.nc_score.base_model, RandomForestRegressor):
+                self.dif_model = RandomForestRegressor(**kwargs).fit(X, y)
+            else:
+                self.dif_model = deepcopy(self.nc_score.base_model)
         return self
 
     def calib(
@@ -79,6 +82,7 @@ class LocartSplit(BaseEstimator):
         cart_train_size=0.5,
         random_projections=False,
         m=1000,
+        h=1,
         projections_seed=1250,
         **kwargs
     ):
@@ -96,6 +100,10 @@ class LocartSplit(BaseEstimator):
         """
         res = self.nc_score.compute(X_calib, y_calib)
 
+        if self.weighting:
+            w = self.compute_difficulty(X_calib)
+            X_calib = np.concatenate((X_calib, w.reshape(-1, 1)), axis=1)
+
         # splitting calibration data into a training half and a validation half
         if self.split_calib:
             (
@@ -106,12 +114,14 @@ class LocartSplit(BaseEstimator):
             ) = train_test_split(
                 X_calib, res, test_size=1 - cart_train_size, random_state=random_seed
             )
-            if random_projections:
+            if random_projections and self.cart_type == "CART":
                 self.rp = True
                 np.random.seed(projections_seed)
-                self.S_matrix = np.random.standard_normal(
-                    (m, X_calib_train.shape[1])
-                ) / np.sqrt(m)
+                self.S_matrix = np.random.normal(
+                    scale=np.sqrt(h), size=(m, X_calib_train.shape[1])
+                )
+                self.ratio_factor = np.sqrt(m)
+                self.b = np.random.uniform(0, 2 * np.pi, size=(1, m))
                 self.rp_scaler = StandardScaler()
                 X_calib_train = self.add_random_projections(
                     self.rp_scaler.fit_transform(X_calib_train)
@@ -122,12 +132,14 @@ class LocartSplit(BaseEstimator):
             else:
                 self.rp = False
         else:
-            if random_projections:
+            if random_projections and self.cart_type == "CART":
                 self.rp = True
                 np.random.seed(projections_seed)
-                self.S_matrix = np.random.standard_normal(
-                    (m, X_calib_train.shape[1])
-                ) / np.sqrt(m)
+                self.S_matrix = np.random.normal(
+                    scale=np.sqrt(h), size=(m, X_calib_train.shape[1])
+                )
+                self.ratio_factor = np.sqrt(m)
+                self.b = np.random.uniform(0, 2 * np.pi, size=(1, m))
                 self.rp_args = [m, projections_seed]
                 self.rp_scaler = StandardScaler()
                 X_calib = self.add_random_projections(
@@ -180,25 +192,67 @@ class LocartSplit(BaseEstimator):
                 leafs_idx = self.cart.apply(X_calib)
 
             self.leaf_idx = np.unique(leafs_idx)
-            n_leafs = self.leaf_idx.shape[0]
+            self.cutoffs = {}
 
-            self.cutoffs = np.zeros(n_leafs)
-            for i in range(n_leafs):
+            for leaf in self.leaf_idx:
                 if self.split_calib:
-                    self.cutoffs[i] = np.quantile(
-                        res_calib_test[leafs_idx == self.leaf_idx[i]], q=1 - self.alpha
+                    self.cutoffs[leaf] = np.quantile(
+                        res_calib_test[leafs_idx == leaf], q=1 - self.alpha
                     )
                 else:
-                    self.cutoffs[i] = np.quantile(
-                        res[leafs_idx == self.leaf_idx[i]], q=1 - self.alpha
+                    self.cutoffs[leaf] = np.quantile(
+                        res[leafs_idx == leaf], q=1 - self.alpha
                     )
+        # random forest instead of CART
+        elif self.cart_type == "RF":
+            self.RF = RandomForestRegressor(
+                random_state=random_seed, min_samples_leaf=100
+            ).set_params(**kwargs)
+            if self.split_calib:
+                self.RF.fit(X_calib_train, res_calib_train)
+                self.cutoffs = self.create_rf_cutoffs(X_calib_test, res_calib_test)
+            else:
+                self.RF.fit(X_calib, res)
+                self.cutoffs = self.create_rf_cutoffs(X_calib, res)
 
         # TODO: implement RFCDE version
 
         return self.cutoffs
 
-    def make_random_projections(self, X):
-        projections = np.dot(X, self.S_matrix.transpose())
+    def compute_difficulty(self, X):
+        cart_pred = np.zeros((X.shape[0], len(self.dif_model.estimators_)))
+        i = 0
+        # computing the difficulty score for each X_score
+        for cart in self.dif_model.estimators_:
+            cart_pred[:, i] = cart.predict(X)
+            i += 1
+        # computing variance for each line
+        return cart_pred.var(1)
+
+    # creating random forest cutoffs
+    def create_rf_cutoffs(self, X, res):
+        # looping through every decision tree in random forest
+        cutoffs_list = []
+        # getting all leafs
+        all_leaves = self.RF.apply(X)
+        for i in range(0, all_leaves.shape[1]):
+            leaves_idx = all_leaves[:, i]
+            leaf_idx = np.unique(leaves_idx)
+            cutoffs = {}
+            for leaf in leaf_idx:
+                cutoffs[leaf] = np.quantile(res[leaves_idx == leaf], q=1 - self.alpha)
+            cutoffs_list.append(cutoffs)
+        return cutoffs_list
+
+    def add_random_projections(self, X):
+        projections = (
+            np.sqrt(2)
+            * np.cos(
+                np.dot(X, self.S_matrix.transpose())
+                + np.repeat(self.b, X.shape[0], axis=0)
+            )
+            / self.ratio_factor
+        )
         return np.concatenate((X, projections), axis=1)
 
     def prune_tree(self, X_train, X_valid, res_train, res_valid):
@@ -268,21 +322,39 @@ class LocartSplit(BaseEstimator):
             plt.title("Decision Tree fitted to non-conformity score")
             plt.show()
 
-    def predict(self, X, type_model="CART"):
+    def predict(self, X, type_model="Tree"):
         """
         Predict $1 - \alpha$ prediction region for each test sample using LocartSplit local cutoff points
         """
         # identifying cutoff point
-        if type_model == "CART":
-            if self.rp:
-                X = self.make_random_projections(self.rp_scaler.transform(X))
+        if self.weighting:
+            w = self.compute_difficulty(X)
+            X_tree = np.concatenate((X, w.reshape(-1, 1)), axis=1)
+        else:
+            X_tree = X
 
-            leaves_idx = self.cart.apply(X)
+        if self.cart_type == "CART" and type_model == "Tree":
+            if self.rp:
+                X_tree = self.add_random_projections(self.rp_scaler.transform(X))
+            elif not self.weighting:
+                X_tree = X
+            leaves_idx = self.cart.apply(X_tree)
             # obtaining order of leaves
-            cutoffs = self.cutoffs[
-                st.rankdata(leaves_idx.astype(int), method="dense") - 1
-            ]
+            cutoffs = np.array(itemgetter(*leaves_idx)(self.cutoffs))
             pred = self.nc_score.predict(X, cutoffs)
+
+        elif self.cart_type == "RF" and type_model == "Tree":
+            all_leaves = self.RF.apply(X_tree)
+            # ranking the order of the leaves by row
+            cutoffs_matrix = np.zeros((X_tree.shape[0], all_leaves.shape[1]))
+            for i in range(0, cutoffs_matrix.shape[1]):
+                cutoffs_matrix[:, i] = np.array(
+                    itemgetter(*all_leaves[:, i])(self.cutoffs[i])
+                )
+
+            # obtaining cutoff means
+            final_cutoffs = np.mean(cutoffs_matrix, axis=1)
+            pred = self.nc_score.predict(X, final_cutoffs)
 
         elif type_model == "euclidean":
             idx = self.uniform_apply(X)
