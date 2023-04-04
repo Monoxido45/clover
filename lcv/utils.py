@@ -162,14 +162,22 @@ def wsc_coverage(
     y_test,
     predictions,
     delta=0.1,
+    test_size=0.75,
     M=1000,
     random_state=2020,
     alpha=0.1,
     verbose=False,
 ):
     # worst slab coverage
-    wsc_value, v, a, b = wsc(
-        X_test, y_test, predictions, delta, M, random_state, verbose
+    wsc_value = wsc_unbiased(
+        X_test = X_test,
+        y_test = y_test,
+        predictions = predictions,
+        delta = delta,
+        M = M,
+        test_size=test_size,
+        random_state=random_state,
+        verbose=verbose,
     )
 
     return np.abs(wsc_value - (1 - alpha))
