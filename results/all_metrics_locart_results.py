@@ -25,9 +25,7 @@ sns.set_palette("Set1")
 # creating csv file with all needed data
 def create_data_list(kind, 
 p = np.array([1, 3, 5]),
-d = 20,
 n_it = 100,
-type_mod = "regression",
 exp_path = "/results/pickle_files/locart_all_metrics_experiments/",
 other_asym = False):
   
@@ -84,7 +82,7 @@ other_asym = False):
       columns = string_names).
       assign(p_var = p[i],
       methods = methods).
-      melt(id_vars = ["n", "methods"],
+      melt(id_vars = ["p_var", "methods"],
       value_vars = string_names,
       var_name = "stats").
       assign(sd = sd_array/np.sqrt(n_it)))
@@ -95,7 +93,30 @@ other_asym = False):
     # concatenating the data frames list into a single one data and saving it to csv
     data_final = pd.concat(stat_list)
     # saving to csv and returning
-    data_final.to_csv(folder_path + "/stats.csv")
+    data_final.to_csv(original_path + folder_path + "/{}_stats.csv".format(kind))
     return(data_final)
   
-  
+# creating data_list to several kind of data
+def create_all_data(kind_list = ["homoscedastic", "heteroscedastic", "asymmetric", 
+"asymmetric_V2", "t_residuals", "non_cor_heteroscedastic"],
+p = np.array([1,3,5]),
+n_it = 100):
+  data_list = []
+  for kind in kind_list:
+    if kind == "asymmetric_V2":
+      other_asym = True
+      kind = "asymmetric"
+    else:
+      other_asym = False
+    # assigning the type of data
+    data = (create_data_list(kind, p = p, n_it = n_it, other_asym = other_asym).
+    assign(data_type = kind))
+    data_list.append(data)
+  return data_list
+
+
+# saving several data at the same time and generating a list of data
+data_list = create_all_data(p = np.array([1, 3]))
+
+
+
