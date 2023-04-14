@@ -71,8 +71,8 @@ def compute_metrics_sim(
     if "_V2" in kind:
       asym_value = 1.5
       kind = "asymmetric"
-      folder_path = "/results/pickle_files/locart_all_metrics_experiments/{}_data_eta_{}".format(
-        kind, asym_value)
+      # folder_path = "/results/pickle_files/locart_all_metrics_experiments/{}_data_eta_{}".format(
+      #   kind, asym_value)
     else:
       folder_path = "/results/pickle_files/locart_all_metrics_experiments/{}_data".format(
         kind)
