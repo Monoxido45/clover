@@ -52,6 +52,7 @@ other_asym = False):
     print("Creating data list")
     # list of data frames
     stat_list = list()
+    corr_list = list()
     for i in range(p.shape[0]):
       # importing the data
       current_folder = original_path + folder_path + "/{}_score_regression_p_{}_10000_samples_measures".format(
@@ -59,13 +60,26 @@ other_asym = False):
       
       # looping through all string names
       data_list = []
+      corr_data_list = []
       for string in string_names:
         current_data = np.load(current_folder + "/" + string + "_p_{}_{}_data.npy".format(p[i], kind))
         # removing rows with only zeroes
         current_data = current_data[~np.all(current_data == 0, axis = 1)]
         if string == "smis":
           current_data = - current_data
+        # data list for extracting means  
         data_list.append(current_data)
+        # transforming in pandas data frame and making a list of data frames to plot correlation more latter
+        corr_data = (pd.DataFrame(current_data, columns = methods).
+        assign(p_var = p[i], 
+               metric = string).
+        melt(id_vars = ["p_var", "metric"],
+        value_vars = methods,
+        var_name = "methods"))
+        corr_data_list.append(corr_data)
+      
+      # adding to correlation data list
+      corr_list.append(pd.concat(corr_data_list))
       
       # obtaining mean vectors in each matrix
       means_list = [np.mean(data, axis = 0) for data in data_list]
@@ -89,6 +103,7 @@ other_asym = False):
       var_name = "stats").
       assign(sd = sd_array/np.sqrt(n_it)))
       
+      
       # adding to a list of data frames
       stat_list.append(new_data)
       
@@ -96,6 +111,10 @@ other_asym = False):
     data_final = pd.concat(stat_list)
     # saving to csv and returning
     data_final.to_csv(original_path + folder_path + "/{}_stats.csv".format(kind))
+    
+    # doing the same to correlation data
+    data_corr_final = pd.concat(corr_list)
+    data_corr_final.to_csv(original_path + folder_path + "/{}_corr_data.csv".format(kind))
     return(data_final)
 
 
@@ -185,23 +204,26 @@ other_vars = np.array(["mean_coverage", "mean_interval_length"]),
 exp_path = "/results/pickle_files/locart_all_metrics_experiments/",
 other_asym = False):
   if other_asym:
-    figname = "sim_{}_data_eta_1.5_regression_experiments".format(kind)
-    fig_times = "sim_{}_data_eta_1.5_running_times".format(kind)
-    fig_corr = "sim_{}_data_eta_1.5_corr_mat".format(kind)
-    figname_others = "sim_{}_data_eta_1.5_other_measures".format(kind)
+    figname = "performance/sim_{}_data_eta_1.5_regression_experiments".format(kind)
+    fig_times = "times/sim_{}_data_eta_1.5_running_times".format(kind)
+    fig_corr = "correlations/sim_{}_data_eta_1.5_corr_mat".format(kind)
+    figname_others = "performance_other/sim_{}_data_eta_1.5_other_measures".format(kind)
+    figname_p = "performance_vs_p/sim_{}_data_eta_1.5_regression_experiments".format(kind)
     folder_path = exp_path + kind + "_data_eta_1.5"
+    kind_to_plot = "asymmetric_V2"
   else:
-    figname = "sim_{}_data_regression_experiments".format(kind)
-    fig_times = "sim_{}_data_running_times".format(kind)
-    fig_corr = "sim_{}_data_corr_mat".format(kind)
-    figname_others = "sim_{}_data_other_measures".format(kind)
+    figname = "performance/sim_{}_data_regression_experiments".format(kind)
+    fig_times = "times/sim_{}_data_running_times".format(kind)
+    fig_corr = "correlations/sim_{}_data_corr_mat".format(kind)
+    figname_others = "performance_other/sim_{}_data_other_measures".format(kind)
+    figname_p = "performance_vs_p/sim_{}_data_regression_experiments".format(kind)
     folder_path = exp_path + kind + "_data"
+    kind_to_plot = kind
     
    # first creating the data list to be plotted
-  data = (pd.read_csv(original_path + folder_path + "/{}_stats.csv".format(kind)).
+  data_main = (pd.read_csv(original_path + folder_path + "/{}_stats.csv".format(kind)).
   assign(sd = lambda df: df['sd']*2).
-  query("p_var in @p").
-  query("stats in @vars_to_plot"))
+  query("p_var in @p"))
   
   # ordering data by custom order
   method_custom_order = CategoricalDtype(
@@ -209,12 +231,13 @@ other_asym = False):
     ordered=True)
   
   # sorting according to the custom order
-  data['methods'] = data['methods'].astype(method_custom_order)
-  data = data.sort_values('methods')
+  data_main['methods'] = data_main['methods'].astype(method_custom_order)
+  data_main = data_main.sort_values('methods')
   
   # with the final data in hands, we can plot the line plots as desired
   # faceting all in a seaborn plot
-  g = sns.FacetGrid(data, col = "stats", row = "p_var", hue = "methods",
+  g = sns.FacetGrid(data_main.
+  query("stats in @vars_to_plot"), col = "stats", row = "p_var", hue = "methods",
   despine = False, margin_titles = True, legend_out = False,
   sharey = False,
   height = 5)
@@ -241,25 +264,46 @@ other_asym = False):
   plt.xticks(rotation = 45)
   plt.savefig(f"{images_dir}/{fig_times}.pdf")
   
-  # plotting heatmap with correlations for all p
-  # creating data to be plotted
-  cor_matrix = (pd.read_csv(original_path + folder_path + "/{}_stats.csv".format(kind)).
-  query("p_var in @p").
-  query("stats in @vars_corr").
-  loc[:, ['p_var', 'methods', 'stats', 'value']].
-  pivot(index = ['p_var', 'methods'], columns = 'stats',
-  values = 'value').
-  corr(method = "spearman"))
+  # plotting heatmap with correlations paired according to p
+  # creating subplots
+  fig, axs = plt.subplots(nrows = 1, ncols = 3, figsize = (16, 10))
   
-  plt.figure(figsize = (16, 8))
-  sns.heatmap(cor_matrix, 
-        xticklabels = cor_matrix.columns,
-        yticklabels = cor_matrix.columns,
-        annot=True,
-        cmap = "Blues")
+  # importing all cor data
+  all_cor_data = ((pd.read_csv(original_path + folder_path + "/{}_stats.csv".format(kind))).
+  rename(columns = {"Unnamed: 0" : "idx"}))
+  
+  # looping through p
+  for p_sel, ax in zip(p, axs):
+    cor_mat = (all_cor_data.
+    query("p_var == @p_sel").
+    query("stats in @vars_corr").
+    pivot(
+      index = "methods",
+      columns = 'stats',
+      values = 'value'
+    ).
+    corr(method = "spearman"))
+    
+    # plotting heatmap
+    sns.heatmap(cor_mat,
+    xticklabels = cor_mat.columns,
+    yticklabels = cor_mat.columns,
+    annot=True,
+    cmap = "Blues",
+    ax = ax,
+    square = True,
+    cbar_kws={"shrink": 0.4}
+    )
+    # setting title in each subplot
+    ax.title.set_text('p = {}'.format(p_sel))
+    ax.tick_params(labelsize = 8.25)
+    
+  
+  # saving figure in correlation folder
+  plt.tight_layout()
   plt.savefig(f"{images_dir}/{fig_corr}.pdf")
   
-  # verifying mean marginal coverage with 
+  # verifying mean marginal coverage and interval length
   data = (pd.read_csv(original_path + folder_path + "/{}_stats.csv".format(kind)).
   assign(sd = lambda df: df['sd']*2).
   query("p_var in @p").
@@ -269,7 +313,6 @@ other_asym = False):
   data['methods'] = data['methods'].astype(method_custom_order)
   data = data.sort_values('methods')
   
-  # with the final data in hands, we can plot the line plots as desired
   # faceting all in a seaborn plot
   g = sns.FacetGrid(data, col = "stats", row = "p_var", hue = "methods",
   despine = False, margin_titles = True, legend_out = False,
@@ -284,6 +327,28 @@ other_asym = False):
   plt.tight_layout()
   plt.savefig(f"{images_dir}/{figname_others}.pdf")
   
+  # finally, making line plots of all metrics against the number of relevant variables for each experiment
+  data_final = data_main.sort_values('p_var')
+  
+  # using same data than before
+  g = sns.FacetGrid(data_final.
+  query("stats in @vars_to_plot"), col = "stats", col_wrap = 2, hue = "methods",
+  hue_order =["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"],
+  despine = False, margin_titles = True, legend_out = False,
+  sharey = False,
+  height = 5)
+  g.map(plt.errorbar, "p_var", "value", "sd", marker = "o")
+  g.figure.subplots_adjust(wspace=0, hspace=0)
+  g.add_legend()
+  g.set_ylabels("Metric values")
+  g.set_xlabels("p (relevant variables)")
+  g.set_xticklabels(rotation = 45)
+  plt.tight_layout()
+  plt.savefig(f"{images_dir}/{figname_p}.pdf")
+  
+  # returning data final to plot more general graphs
+  return(data_final.assign(kind = kind_to_plot))
+  
 
 # plotting all at the same time
 if __name__ == '__main__':
@@ -291,11 +356,126 @@ if __name__ == '__main__':
   # selecting all p's
   p = np.array([1,3, 5])
   kinds_list = ["homoscedastic", "heteroscedastic", "asymmetric", "asymmetric_V2", "t_residuals", "non_cor_heteroscedastic"]
+  data_final_list = []
   for kind in kinds_list:
     if kind == "asymmetric_V2":
       other_asym = True
       kind = "asymmetric"
-      plot_results_by_methods(kind, p = p, other_asym = other_asym)
+      data_final_list.append(plot_results_by_methods(kind, p = p, other_asym = other_asym))
     else:
-      plot_results_by_methods(kind, p = p)
+      data_final_list.append(plot_results_by_methods(kind, p = p))
+      
+  vars_corr = np.array(["smis", "mean_valid_pred_set", "wsc", "pcor", "HSIC", "mean_diff", "max_diff"])
+    
+  images_dir = "results/metric_figures"
+  figname_p = "performance_vs_p/general_regression_experiments"
+  results_p = "performance_vs_p/general_results"
+  corr_p = "correlations/general_corr_mat"
+  
+  method_custom_order = CategoricalDtype(
+  ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"], 
+  ordered=True)
+  
+  data_final = (pd.concat(data_final_list).
+  query("stats == 'mean_diff'"))
+  
+  # correlation data
+  all_cor_data = pd.concat(data_final_list)
+  
+  g = sns.FacetGrid(data_final, col = "kind", col_wrap = 3,
+  despine = False, margin_titles = True, legend_out = False,
+  sharey = False,
+  height = 5)
+  g.map(sns.pointplot, "p_var", "value", "methods", 
+  hue_order =  ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"],
+  marker = "o",
+  palette = "Set1",
+  scale = 0.75)
+  g.figure.subplots_adjust(wspace=0, hspace=0)
+  plt.legend(loc = "lower right")
+  g.set_ylabels("Mean difference metric")
+  g.set_xlabels("p")
+  plt.tight_layout()
+  plt.savefig(f"{images_dir}/{figname_p}.pdf")
+  
+  
+  # barplot graph with frequency of methods with better mean difference
+  data_count_mean_diff = (data_final.
+  query("stats == 'mean_diff'").
+  groupby(['p_var', 'kind']).
+  apply(lambda df: df.nsmallest(n = 2, columns = 'value')).
+  value_counts("methods"))
+  
+  # now with better smis
+  data_count_smis = (pd.concat(data_final_list).
+  query("stats == 'smis'").
+  groupby(['p_var', 'kind']).
+  apply(lambda df: df.nsmallest(n = 2, columns = 'value')).
+  value_counts("methods"))
+  
+  # plotting count of data into two barplots
+  fig, (ax1, ax2) = plt.subplots(nrows = 1, ncols = 2, figsize = (12, 10))
+  ax1.bar(x = data_count_mean_diff.keys(), height = data_count_mean_diff.values,
+  color = "tab:blue", alpha = 0.5)
+  ax1.set_title("Mean difference")
+  ax1.set_xlabel("Methods")
+  ax1.set_ylabel("Frequency")
+  ax1.tick_params(axis = "x", labelrotation=45)
+
+  ax2.bar(x = data_count_smis.keys(), height = data_count_smis.values,
+  color = "tab:blue", alpha = 0.5)
+  ax2.set_title("Smis")
+  ax2.set_xlabel("Methods")
+  ax2.set_ylabel("Frequency")
+  ax2.tick_params(axis = "x", labelrotation=45)
+  
+  plt.tight_layout()
+  plt.savefig(f"{images_dir}/{results_p}.pdf")
+  
+  # plotting overall correlation heatmaps 
+    
+  # creating subplots
+  fig, axs = plt.subplots(nrows = 1, ncols = 3, figsize = (16, 10))
+
+  # looping through p
+  for p_sel, ax in zip(p, axs):
+    cor_list = []
+    for kind_current in kinds_list:
+      # obtaining correlation matrices for each kind
+      cor_list.append(all_cor_data.
+      query("p_var == @p_sel").
+      query("stats in @vars_corr and kind == @kind_current").
+      pivot(
+        index = "methods",
+        columns = 'stats',
+        values = 'value'
+      ).
+      corr(method = "spearman"))
+    
+    # obtaining mean from correlation list
+    columns_name = cor_list[0].columns
+    cor_mat = np.mean(np.array(cor_list), axis = 0)
+    
+    # plotting heatmap
+    sns.heatmap(cor_mat,
+    xticklabels = columns_name,
+    yticklabels = columns_name,
+    annot=True,
+    cmap = "Blues",
+    ax = ax,
+    square = True,
+    cbar_kws={"shrink": 0.4}
+    )
+    # setting title in each subplot
+    ax.title.set_text('p = {}'.format(p_sel))
+    ax.tick_params(labelsize = 7)
+    
+  
+  # saving figure in correlation folder
+  plt.tight_layout()
+  plt.savefig(f"{images_dir}/{corr_p}.pdf")
+  
+    
+    
+    
     
