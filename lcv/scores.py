@@ -85,6 +85,9 @@ class LocalRegressionScore(Scores):
         self.pred_mad = pred_mad
         self.vanilla_res = np.abs(pred_reg - y_calib)
 
+        # avoiding division by zero by adding and epsilon in pred_mad entries with zero
+        pred_mad[pred_mad == 0] = 10**(-10)
+
         res = res_model / pred_mad
         return res
 
