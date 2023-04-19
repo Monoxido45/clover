@@ -38,26 +38,29 @@ class LocartSplit(BaseEstimator):
         nc_score,
         base_model,
         alpha,
+        is_fitted=False,
         base_model_type=None,
         cart_type="CART",
         split_calib=True,
         weighting=False,
         **kwargs
     ):
-
         self.base_model_type = base_model_type
         if ("Quantile" in str(nc_score)) or (base_model_type == True):
-            self.nc_score = nc_score(base_model, alpha=alpha, **kwargs)
+            self.nc_score = nc_score(
+                base_model, is_fitted=is_fitted, alpha=alpha, **kwargs
+            )
         else:
-            self.nc_score = nc_score(base_model, **kwargs)
+            self.nc_score = nc_score(base_model, is_fitted=is_fitted, **kwargs)
 
+        # checking if base model is fitted
         self.base_model = self.nc_score.base_model
         self.alpha = alpha
         self.cart_type = cart_type
         self.split_calib = split_calib
         self.weighting = weighting
 
-    def fit(self, X, y, **kwargs):
+    def fit(self, X, y, random_seed_tree = 1250, **kwargs):
         """
         Fit non conformity score to training samples
         --------------------------------------------------------
@@ -67,7 +70,7 @@ class LocartSplit(BaseEstimator):
         self.nc_score.fit(X, y)
         if self.weighting == True:
             if not isinstance(self.nc_score.base_model, RandomForestRegressor):
-                self.dif_model = RandomForestRegressor(**kwargs).fit(X, y)
+                self.dif_model = RandomForestRegressor(random_state = random_seed_tree).set_params(**kwargs).fit(X, y)
             else:
                 self.dif_model = deepcopy(self.nc_score.base_model)
         return self
@@ -367,9 +370,10 @@ class LocartSplit(BaseEstimator):
 
 
 class QuantileSplit(BaseEstimator):
-    def __init__(self, base_model, alpha, **kwargs):
-        self.base_model = base_model
-        self.nc_score = QuantileScore(self.base_model, alpha=alpha, **kwargs)
+    def __init__(self, base_model, alpha, is_fitted=False, **kwargs):
+        self.nc_score = QuantileScore(
+            base_model, is_fitted=is_fitted, alpha=alpha, **kwargs
+        )
         self.alpha = alpha
 
     def fit(self, X_train, y_train):
@@ -387,14 +391,13 @@ class QuantileSplit(BaseEstimator):
 
 # Local regression split proposed by Lei et al
 class LocalRegressionSplit(BaseEstimator):
-    def __init__(self, base_model, alpha, **kwargs):
-        self.base_model = base_model
-        self.nc_score = LocalRegressionScore(self.base_model, **kwargs)
+    def __init__(self, base_model, alpha, is_fitted=False, **kwargs):
+        self.nc_score = LocalRegressionScore(base_model, is_fitted=is_fitted, **kwargs)
         self.alpha = alpha
 
-    def fit(self, X_train, y_train, mad_model_cte=False):
+    def fit(self, X_train, y_train):
         # fitting the base model
-        self.nc_score.fit(X_train, y_train, mad_model_cte=mad_model_cte)
+        self.nc_score.fit(X_train, y_train)
         return self
 
     def calibrate(self, X_calib, y_calib):
@@ -408,28 +411,31 @@ class LocalRegressionSplit(BaseEstimator):
 
 # Mondrian split method proposed by Bostrom et al
 class MondrianRegressionSplit(BaseEstimator):
-    def __init__(self, base_model, alpha, k=10, **kwargs):
+    def __init__(self, base_model, alpha, is_fitted=False, k=10, **kwargs):
         self.base_model = base_model
         self.k = k
-        self.nc_score = RegressionScore(self.base_model, **kwargs)
+        self.nc_score = RegressionScore(self.base_model, is_fitted=is_fitted, **kwargs)
         self.alpha = alpha
 
-    def fit(self, X_train, y_train, **kwargs):
+    def fit(self, X_train, y_train, random_seed_tree = 550, **kwargs):
         # fitting the base model
         self.nc_score.fit(X_train, y_train)
         # training RandomForestRegressor for difficulty estimation if base model is not RandomForest
         if not isinstance(self.nc_score.base_model, RandomForestRegressor):
-            self.dif_model = RandomForestRegressor(**kwargs).fit(X_train, y_train)
+            self.dif_model = RandomForestRegressor(random_state = random_seed_tree).set_params(**kwargs).fit(X_train, y_train)
         else:
             self.dif_model = deepcopy(self.nc_score.base_model)
 
         return self
 
-    def calibrate(self, X_calib, y_calib, random_state=1250):
-        # making the split
-        X_score, X_final, y_score, y_final = train_test_split(
-            X_calib, y_calib, test_size=0.5, random_state=random_state
-        )
+    def calibrate(self, X_calib, y_calib, split=False, random_state=1250):
+        if split:
+            # making the split
+            X_score, X_final, y_score, y_final = train_test_split(
+                X_calib, y_calib, test_size=0.5, random_state=random_state
+            )
+        else:
+            X_score, X_final, y_score, y_final = X_calib, X_calib, y_calib, y_calib
 
         # computing the difficulty score for each X_score
         pred_dif = self.compute_difficulty(X_score)
