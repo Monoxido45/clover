@@ -38,7 +38,6 @@ FILES = {
 output_folder = get_folder(f"data/raw/{DATASET}")
 
 for file in FILES[DATASET]:
-
     file_url = f"{URL[DATASET]}/{file}"
     file_path = f"{output_folder}/{file}"
 
