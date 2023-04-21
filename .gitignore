@@ -165,7 +165,12 @@ results/figures
 results/.ipynb_checkpoints
 
 # remove data 
-data/
+data/processed
+data/raw/*
+!data/raw/star
+!data/raw/meps
+!data/raw/bike
+
 !scripts/data
 
 # figures in examples
