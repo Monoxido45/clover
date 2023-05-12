@@ -21,7 +21,8 @@ from pandas.api.types import CategoricalDtype
 original_path = os.getcwd()
 # plotting object (if needed)
 plt.style.use('seaborn-white')
-sns.set_palette("Set1")
+sns.set_palette("tab10")
+plt.rcParams.update({'font.size': 12})
 
 # creating csv file with all needed data
 def create_data_list(kind, 
@@ -138,15 +139,17 @@ other_asym = False):
     print("Creating data list")
     # list of data frames
     data_list = list()
+    times_list = list()
     for i in range(p.shape[0]):
       # importing the data
       current_folder = original_path + folder_path + "/{}_score_regression_p_{}_10000_samples_measures".format(
         kind, p[i])
-      
+        
       # only one string name
       current_data = np.load(current_folder + "/" + string + "_p_{}_{}_data.npy".format(p[i], kind))
       # removing rows with only zeroes
       current_data = current_data[~np.all(current_data == 0, axis = 1)]
+      
       new_data = (pd.DataFrame(current_data,
       columns = methods).
       assign(p_var = p[i]).
@@ -154,15 +157,33 @@ other_asym = False):
       value_vars = methods,
       var_name = "methods"))
       
+       # obtaining proportions by row
+      prop_data = current_data/np.sum(current_data, axis = 1)[:, None]
+    
+      # proportion data
+      data_prop = (pd.DataFrame(prop_data,
+      columns = methods).
+      assign(p_var = p[i]).
+      melt(
+        id_vars = ["p_var"],
+        value_vars = methods,
+        var_name = "methods"
+      ))
+      
       # adding to a list of data frames
       data_list.append(new_data)
+      times_list.append(data_prop)
       
     # concatenating the data frames list into a single one data and saving it to csv
     data_final = pd.concat(data_list)
+    time_data = pd.concat(times_list)
+    
     # saving to csv and returning
     data_final.to_csv(original_path + folder_path + "/{}_running_times.csv".format(kind))
+    time_data.to_csv(original_path + folder_path + "/{}_prop_times.csv".format(kind))
     return(data_final)
-  
+
+
 # creating data_list to several kind of data
 def create_all_data(kind_list = ["homoscedastic", "heteroscedastic", "asymmetric", 
 "asymmetric_V2", "t_residuals", "non_cor_heteroscedastic"],
@@ -238,17 +259,18 @@ other_asym = False):
   # faceting all in a seaborn plot
   g = sns.FacetGrid(data_main.
   query("stats in @vars_to_plot"), col = "stats", row = "p_var", hue = "methods",
-  despine = False, margin_titles = True, legend_out = False,
+  despine = False, margin_titles = True, legend_out = True,
   sharey = False,
   height = 5)
   g.map(plt.errorbar, "methods", "value", "sd", marker = "o")
   g.figure.subplots_adjust(wspace=0, hspace=0)
-  g.add_legend()
+  g.add_legend(bbox_to_anchor = (1.0575, 0.5), title = "Methods")
   g.set_ylabels("Metric values")
   g.set_xlabels("Methods")
   g.set_xticklabels(rotation = 45)
+  g.set_titles(col_template="{col_name}", row_template = "p = {row_name}")
   plt.tight_layout()
-  plt.savefig(f"{images_dir}/{figname}.pdf")
+  plt.savefig(f"{images_dir}/{figname}.pdf", bbox_inches="tight")
   
   # importing running times data
   data_times = (pd.read_csv(original_path + folder_path + "/{}_running_times.csv".format(kind)).
@@ -259,10 +281,11 @@ other_asym = False):
   # plotting running times as boxplot
   plt.figure(figsize = (16, 8))
   sns.boxplot(data = data_times, x = 'methods', y = 'value', hue = 'methods')
-  plt.xlabel("Methdos")
+  plt.xlabel("Methods")
   plt.ylabel("Running times (seconds)")
   plt.xticks(rotation = 45)
-  plt.savefig(f"{images_dir}/{fig_times}.pdf")
+  plt.legend(bbox_to_anchor = (1.1, 0.55))
+  plt.savefig(f"{images_dir}/{fig_times}.pdf", bbox_inches="tight")
   
   # plotting heatmap with correlations paired according to p
   # creating subplots
@@ -315,17 +338,18 @@ other_asym = False):
   
   # faceting all in a seaborn plot
   g = sns.FacetGrid(data, col = "stats", row = "p_var", hue = "methods",
-  despine = False, margin_titles = True, legend_out = False,
+  despine = False, margin_titles = True, legend_out = True,
   sharey = False,
   height = 5)
   g.map(plt.errorbar, "methods", "value", "sd", marker = "o")
   g.figure.subplots_adjust(wspace=0, hspace=0)
-  g.add_legend()
+  g.add_legend(bbox_to_anchor = (1.1, 0.55))
   g.set_ylabels("Metric values")
   g.set_xlabels("Methods")
+  g.set_titles(col_template="{col_name}", row_template = "{row_name}")
   g.set_xticklabels(rotation = 45)
   plt.tight_layout()
-  plt.savefig(f"{images_dir}/{figname_others}.pdf")
+  plt.savefig(f"{images_dir}/{figname_others}.pdf", bbox_inches="tight")
   
   # finally, making line plots of all metrics against the number of relevant variables for each experiment
   data_final = data_main.sort_values('p_var')
@@ -334,17 +358,18 @@ other_asym = False):
   g = sns.FacetGrid(data_final.
   query("stats in @vars_to_plot"), col = "stats", col_wrap = 2, hue = "methods",
   hue_order =["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"],
-  despine = False, margin_titles = True, legend_out = False,
+  despine = False, margin_titles = True, legend_out = True,
   sharey = False,
   height = 5)
   g.map(plt.errorbar, "p_var", "value", "sd", marker = "o")
   g.figure.subplots_adjust(wspace=0, hspace=0)
-  g.add_legend()
+  g.add_legend(bbox_to_anchor = (1.1, 0.55))
   g.set_ylabels("Metric values")
   g.set_xlabels("p (relevant variables)")
+  g.set_titles(col_template="{col_name}")
   g.set_xticklabels(rotation = 45)
   plt.tight_layout()
-  plt.savefig(f"{images_dir}/{figname_p}.pdf")
+  plt.savefig(f"{images_dir}/{figname_p}.pdf", bbox_inches="tight")
   
   # returning data final to plot more general graphs
   return(data_final.assign(kind = kind_to_plot))
@@ -355,27 +380,44 @@ if __name__ == '__main__':
   print("plotting all results for wsc, smis and real diff")
   # selecting all p's
   p = np.array([1,3, 5])
-  kinds_list = ["homoscedastic", "heteroscedastic", "asymmetric", "asymmetric_V2", "t_residuals", "non_cor_heteroscedastic"]
+  kinds_list = ["homoscedastic", "heteroscedastic", "asymmetric", "asymmetric_V2", 
+  "t_residuals", "non_cor_heteroscedastic"]
+  kinds_names = ["Homoscedastisc", "Heteroscedastic", "Asymmetric", "Asymmetric 2", 
+  "T residuals", "Non-correlated heteroscedastic"]
   data_final_list = []
-  for kind in kinds_list:
+  time_data_list = []
+  # path to times data set
+  exp_path = "/results/pickle_files/locart_all_metrics_experiments/"
+  
+  for (kind, kind_name) in zip(kinds_list, kinds_names):
     if kind == "asymmetric_V2":
       other_asym = True
       kind = "asymmetric"
-      data_final_list.append(plot_results_by_methods(kind, p = p, other_asym = other_asym))
+      folder_path = exp_path + kind + "_data"
+      data_final_list.append(plot_results_by_methods(kind, p = p, other_asym = other_asym).assign(
+        kind = kind_name))
+      time_data_list.append(pd.read_csv(original_path + folder_path + "_eta_1.5" + "/{}_prop_times.csv".format(
+        kind)).assign(kind = kind_name))
     else:
-      data_final_list.append(plot_results_by_methods(kind, p = p))
-      
+      folder_path = exp_path + kind + "_data"
+      data_final_list.append(plot_results_by_methods(kind, p = p).assign(kind = kind_name))
+      time_data_list.append(pd.read_csv(original_path + folder_path + "/{}_prop_times.csv".format(
+        kind)).assign(kind = kind_name))
+  
+  props_time_all = pd.concat(time_data_list)
   vars_corr = np.array(["smis", "mean_valid_pred_set", "wsc", "pcor", "HSIC", "mean_diff", "max_diff"])
     
   images_dir = "results/metric_figures"
   figname_p = "performance_vs_p/general_regression_experiments"
   results_p = "performance_vs_p/general_results"
   corr_p = "correlations/general_corr_mat"
+  fig_times_prop  = "times/all_times_proportion"
   
   method_custom_order = CategoricalDtype(
   ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"], 
   ordered=True)
   
+  props_time_all['methods'] = props_time_all['methods'].astype(method_custom_order)
   data_final = (pd.concat(data_final_list).
   query("stats == 'mean_diff'"))
   
@@ -383,20 +425,21 @@ if __name__ == '__main__':
   all_cor_data = pd.concat(data_final_list)
   
   g = sns.FacetGrid(data_final, col = "kind", col_wrap = 3,
-  despine = False, margin_titles = True, legend_out = False,
+  despine = False, margin_titles = True, legend_out = True,
   sharey = False,
   height = 5)
   g.map(sns.pointplot, "p_var", "value", "methods", 
   hue_order =  ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"],
   marker = "o",
-  palette = "Set1",
+  palette = "tab10",
   scale = 0.75)
   g.figure.subplots_adjust(wspace=0, hspace=0)
-  plt.legend(loc = "lower right")
   g.set_ylabels("Mean difference metric")
   g.set_xlabels("p")
+  g.set_titles(col_template="{col_name}")
+  g.add_legend(bbox_to_anchor = (1.1, 0.55), title = "Methods")
   plt.tight_layout()
-  plt.savefig(f"{images_dir}/{figname_p}.pdf")
+  plt.savefig(f"{images_dir}/{figname_p}.pdf", bbox_inches="tight")
   
   
   # barplot graph with frequency of methods with better mean difference
@@ -414,7 +457,7 @@ if __name__ == '__main__':
   value_counts("methods"))
   
   # plotting count of data into two barplots
-  fig, (ax1, ax2) = plt.subplots(nrows = 1, ncols = 2, figsize = (12, 10))
+  fig, (ax1, ax2) = plt.subplots(nrows = 1, ncols = 2, figsize = (10, 6))
   ax1.bar(x = data_count_mean_diff.keys(), height = data_count_mean_diff.values,
   color = "tab:blue", alpha = 0.5)
   ax1.set_title("Mean difference")
@@ -432,15 +475,14 @@ if __name__ == '__main__':
   plt.tight_layout()
   plt.savefig(f"{images_dir}/{results_p}.pdf")
   
-  # plotting overall correlation heatmaps 
-    
-  # creating subplots
-  fig, axs = plt.subplots(nrows = 1, ncols = 3, figsize = (16, 10))
+  # plotting overall correlation heatmap
+  plt.figure(figsize = (14, 10))
 
   # looping through p
-  for p_sel, ax in zip(p, axs):
+  general_cor_list = []
+  for p_sel in p:
     cor_list = []
-    for kind_current in kinds_list:
+    for kind_current in kinds_names:
       # obtaining correlation matrices for each kind
       cor_list.append(all_cor_data.
       query("p_var == @p_sel").
@@ -455,25 +497,33 @@ if __name__ == '__main__':
     # obtaining mean from correlation list
     columns_name = cor_list[0].columns
     cor_mat = np.mean(np.array(cor_list), axis = 0)
+    general_cor_list.append(cor_mat)
     
-    # plotting heatmap
-    sns.heatmap(cor_mat,
-    xticklabels = columns_name,
-    yticklabels = columns_name,
-    annot=True,
-    cmap = "Blues",
-    ax = ax,
-    square = True,
-    cbar_kws={"shrink": 0.4}
-    )
-    # setting title in each subplot
-    ax.title.set_text('p = {}'.format(p_sel))
-    ax.tick_params(labelsize = 7)
-    
-  
-  # saving figure in correlation folder
-  plt.tight_layout()
+  all_cor_mat = np.mean(np.array(general_cor_list), axis = 0)
+  # plotting heatmap
+  sns.heatmap(all_cor_mat,
+  xticklabels = columns_name,
+  yticklabels = columns_name,
+  annot=True,
+  cmap = "Blues",
+  square = True,
+  annot_kws={"size":12}
+  )
   plt.savefig(f"{images_dir}/{corr_p}.pdf")
+  
+  
+  plt.figure(figsize = (14, 12))
+  sns.pointplot(data = props_time_all, x = "kind", y = "value", hue = "methods", 
+  dodge = True, join=False, errorbar=('ci', 90), orient = "v", marker = "o", scale = 0.65)
+  plt.xlabel("Data")
+  plt.ylabel("Running time proportions")
+  plt.yscale('log')
+  plt.yticks([0.01, 0.1, 0.5, 1])
+  plt.xticks(rotation = 45)
+  plt.legend(bbox_to_anchor = (1.115, 0.55), title = "Methods")
+  plt.savefig(f"{images_dir}/{fig_times_prop}.pdf", bbox_inches="tight")
+  
+  plt.close('all')
   
     
     

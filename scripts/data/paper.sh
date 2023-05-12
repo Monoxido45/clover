@@ -25,3 +25,6 @@ python scripts/data/process.py -d electric
 python scripts/data/process.py -d cycle
 python scripts/data/process.py -d winered
 python scripts/data/process.py -d winewhite
+python scripts/data/process.py -d bike
+python scripts/data/process.py -d meps19
+python scripts/data/process.py -d star

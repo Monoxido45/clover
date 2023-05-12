@@ -164,8 +164,17 @@ cython_debug/
 results/figures
 results/.ipynb_checkpoints
 
+# removing results
+results/pickle_files
+results/metric_figures
+
 # remove data 
-data/
+data/processed
+data/raw/*
+!data/raw/star
+!data/raw/meps
+!data/raw/bike
+
 !scripts/data
 
 # figures in examples
