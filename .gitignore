@@ -170,3 +170,7 @@ data/
 
 # figures in examples
 /examples/figures/
+
+# data backup
+all_data_backup.zip
+all_metric_figures.zip
