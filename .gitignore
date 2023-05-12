@@ -174,3 +174,6 @@ data/
 # data backup
 all_data_backup.zip
 all_metric_figures.zip
+
+# all_metric_fiugres
+/all_metric_figures
