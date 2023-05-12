@@ -22,6 +22,7 @@ from acpi import ACPI
 import time
 from lcv.utils import compute_interval_length, split, smis, pearson_correlation, HSIC_correlation
 from lcv.valid_pred_sets import Valid_pred_sets
+import gc
 
 # original path
 original_path = os.getcwd()
@@ -189,6 +190,12 @@ def compute_metrics(
         # correlations
         pcor_vector[it, 0] = pearson_correlation(locart_pred, y_test)
         HSIC_vector[it, 0] = HSIC_correlation(locart_pred, y_test)
+        
+        # deletting objects and removing from memory
+        del(locart_obj)
+        del(locart_valid)
+        del(cover_idx)
+        gc.collect()
     
         # fitting normal RF-locart
         start_loc = time.time()
