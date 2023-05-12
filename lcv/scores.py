@@ -11,7 +11,7 @@ class Scores(ABC):
         self.is_fitted = is_fitted
         if self.is_fitted:
             self.base_model = base_model
-        elif self.base_model is not None:
+        elif base_model is not None:
             self.base_model = base_model(**kwargs)
 
     @abstractmethod
@@ -86,7 +86,7 @@ class LocalRegressionScore(Scores):
         self.vanilla_res = np.abs(pred_reg - y_calib)
 
         # avoiding division by zero by adding and epsilon in pred_mad entries with zero
-        pred_mad[pred_mad == 0] = 10**(-10)
+        pred_mad[pred_mad == 0] = 10 ** (-10)
 
         res = res_model / pred_mad
         return res

@@ -60,7 +60,7 @@ class LocartSplit(BaseEstimator):
         self.split_calib = split_calib
         self.weighting = weighting
 
-    def fit(self, X, y, random_seed_tree = 1250, **kwargs):
+    def fit(self, X, y, random_seed_tree=1250, **kwargs):
         """
         Fit non conformity score to training samples
         --------------------------------------------------------
@@ -70,7 +70,11 @@ class LocartSplit(BaseEstimator):
         self.nc_score.fit(X, y)
         if self.weighting == True:
             if not isinstance(self.nc_score.base_model, RandomForestRegressor):
-                self.dif_model = RandomForestRegressor(random_state = random_seed_tree).set_params(**kwargs).fit(X, y)
+                self.dif_model = (
+                    RandomForestRegressor(random_state=random_seed_tree)
+                    .set_params(**kwargs)
+                    .fit(X, y)
+                )
             else:
                 self.dif_model = deepcopy(self.nc_score.base_model)
         return self
@@ -199,12 +203,22 @@ class LocartSplit(BaseEstimator):
 
             for leaf in self.leaf_idx:
                 if self.split_calib:
+                    current_res = res_calib_test[leafs_idx == leaf]
+
+                    # correcting 1 - alpha
+                    n = current_res.shape[0]
+
                     self.cutoffs[leaf] = np.quantile(
-                        res_calib_test[leafs_idx == leaf], q=1 - self.alpha
+                        current_res, q=np.ceil((n + 1) * (1 - self.alpha)) / n
                     )
                 else:
+                    current_res = res[leafs_idx == leaf]
+
+                    # correcting 1 - alpha
+                    n = current_res.shape[0]
+
                     self.cutoffs[leaf] = np.quantile(
-                        res[leafs_idx == leaf], q=1 - self.alpha
+                        current_res, q=np.ceil((n + 1) * (1 - self.alpha)) / n
                     )
         # random forest instead of CART
         elif self.cart_type == "RF":
@@ -243,7 +257,12 @@ class LocartSplit(BaseEstimator):
             leaf_idx = np.unique(leaves_idx)
             cutoffs = {}
             for leaf in leaf_idx:
-                cutoffs[leaf] = np.quantile(res[leaves_idx == leaf], q=1 - self.alpha)
+                current_res = res[leaves_idx == leaf]
+                # correcting 1 - alpha
+                n = current_res.shape[0]
+                cutoffs[leaf] = np.quantile(
+                    current_res, q=np.ceil((n + 1) * (1 - self.alpha)) / n
+                )
             cutoffs_list.append(cutoffs)
         return cutoffs_list
 
@@ -382,7 +401,8 @@ class QuantileSplit(BaseEstimator):
 
     def calibrate(self, X_calib, y_calib):
         res = self.nc_score.compute(X_calib, y_calib)
-        self.cutoff = np.quantile(res, q=1 - self.alpha)
+        n = X_calib.shape[0]
+        self.cutoff = np.quantile(res, q=np.ceil((n + 1) * (1 - self.alpha)) / n)
         return None
 
     def predict(self, X_test):
@@ -402,7 +422,8 @@ class LocalRegressionSplit(BaseEstimator):
 
     def calibrate(self, X_calib, y_calib):
         res = self.nc_score.compute(X_calib, y_calib)
-        self.cutoff = np.quantile(res, q=1 - self.alpha)
+        n = X_calib.shape[0]
+        self.cutoff = np.quantile(res, q=np.ceil((n + 1) * (1 - self.alpha)) / n)
         return None
 
     def predict(self, X_test):
@@ -417,12 +438,16 @@ class MondrianRegressionSplit(BaseEstimator):
         self.nc_score = RegressionScore(self.base_model, is_fitted=is_fitted, **kwargs)
         self.alpha = alpha
 
-    def fit(self, X_train, y_train, random_seed_tree = 550, **kwargs):
+    def fit(self, X_train, y_train, random_seed_tree=550, **kwargs):
         # fitting the base model
         self.nc_score.fit(X_train, y_train)
         # training RandomForestRegressor for difficulty estimation if base model is not RandomForest
         if not isinstance(self.nc_score.base_model, RandomForestRegressor):
-            self.dif_model = RandomForestRegressor(random_state = random_seed_tree).set_params(**kwargs).fit(X_train, y_train)
+            self.dif_model = (
+                RandomForestRegressor(random_state=random_seed_tree)
+                .set_params(**kwargs)
+                .fit(X_train, y_train)
+            )
         else:
             self.dif_model = deepcopy(self.nc_score.base_model)
 
@@ -456,8 +481,10 @@ class MondrianRegressionSplit(BaseEstimator):
 
         # obtaing all cutoffs
         for i in range(0, self.k):
+            current_res = res[np.where(int_idx == i)]
+            n = current_res.shape[0]
             self.mondrian_cutoffs[i] = np.quantile(
-                res[np.where(int_idx == i)], q=1 - self.alpha
+                current_res, q=np.ceil((n + 1) * (1 - self.alpha)) / n
             )
         return None
 
