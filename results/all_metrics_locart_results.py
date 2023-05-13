@@ -412,6 +412,7 @@ if __name__ == '__main__':
   results_p = "performance_vs_p/general_results"
   corr_p = "correlations/general_corr_mat"
   fig_times_prop  = "times/all_times_proportion"
+  marginal_cover = "performance_other/general_marginal_coverage"
   
   method_custom_order = CategoricalDtype(
   ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"], 
@@ -421,9 +422,13 @@ if __name__ == '__main__':
   data_final = (pd.concat(data_final_list).
   query("stats == 'mean_diff'"))
   
+  data_marginal = (pd.concat(data_final_list).
+  query("stats == 'mean_coverage'"))
+  
   # correlation data
   all_cor_data = pd.concat(data_final_list)
   
+  # plotting all errorbars for conditional coverage
   g = sns.FacetGrid(data_final, col = "kind", col_wrap = 3,
   despine = False, margin_titles = True, legend_out = True,
   sharey = False,
@@ -440,6 +445,22 @@ if __name__ == '__main__':
   g.add_legend(bbox_to_anchor = (1.1, 0.55), title = "Methods")
   plt.tight_layout()
   plt.savefig(f"{images_dir}/{figname_p}.pdf", bbox_inches="tight")
+  
+  # plotting the same to marginal coverage
+  g = sns.FacetGrid(data_marginal, col = "p_var", row = "kind", hue = "methods",
+  despine = False, margin_titles = True, legend_out = True,
+  sharey = True, height = 5)
+  g.map(plt.errorbar, "methods", "value", "sd", marker = "o")
+  g.map(plt.axhline, y = 0.9, ls='--', c='red')
+  
+  g.figure.subplots_adjust(wspace=0, hspace=0)
+  g.add_legend(bbox_to_anchor = (1.1, 0.5), title = "Methods")
+  g.set_ylabels("Marginal Coverage")
+  g.set_xlabels("Methods")
+  g.set_xticklabels(rotation = 45)
+  g.set_titles(col_template="{col_name}")
+  plt.tight_layout()
+  plt.savefig(f"{images_dir}/{marginal_cover}.pdf", bbox_inches="tight")
   
   
   # barplot graph with frequency of methods with better mean difference
