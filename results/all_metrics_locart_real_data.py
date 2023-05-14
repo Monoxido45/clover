@@ -194,6 +194,7 @@ def compute_metrics(
         # deletting objects and removing from memory
         del(locart_obj)
         del(locart_valid)
+        del(locart_pred)
         del(cover_idx)
         gc.collect()
     
@@ -239,6 +240,14 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 1] = np.mean(compute_interval_length(rf_locart_pred[cover_idx]))
+        
+        # deletting objects and removing from memory
+        del(rf_locart_obj)
+        del(rf_locart_valid)
+        del(rf_locart_pred)
+        del(cover_idx)
+        gc.collect()
+    
     
     
         # fitting normal difficulty locart
@@ -284,6 +293,13 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 2] = np.mean(compute_interval_length(dlocart_pred[cover_idx]))
+        
+        # deletting objects and removing from memory
+        del(dlocart_obj)
+        del(dlocart_valid)
+        del(dlocart_pred)
+        del(cover_idx)
+        gc.collect()
     
     
         # fitting RF difficulty locart
@@ -327,6 +343,13 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 3] = np.mean(compute_interval_length(rf_dlocart_pred[cover_idx]))
+        
+        # deletting objects and removing from memory
+        del(rf_dlocart_obj)
+        del(rf_dlocart_valid)
+        del(rf_dlocart_pred)
+        del(cover_idx)
+        gc.collect()
 
     
         # fitting ACPI/LCP-RF
@@ -365,6 +388,13 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 4] = np.mean(compute_interval_length(acpi_pred[cover_idx]))
+        
+        # deletting objects and removing from memory
+        del(acpi)
+        del(acpi_valid)
+        del(acpi_pred)
+        del(cover_idx)
+        gc.collect()
         
     
         # fitting wlocart
@@ -408,12 +438,19 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 5] = np.mean(compute_interval_length(wlocart_pred[cover_idx]))
+        
+        # deletting objects and removing from memory
+        del(wlocart_obj)
+        del(wlocart_valid)
+        del(wlocart_pred)
+        del(cover_idx)
+        gc.collect()
     
     
         # fitting default regression split
         start_split = time.time()
-        model = base_model(**kwargs)
-        nc = NcFactory.create_nc(model)
+        new_model = base_model(**kwargs)
+        nc = NcFactory.create_nc(new_model)
         icp = IcpRegressor(nc)
         icp.fit(data["X_train"], data["y_train"])
         icp.calibrate(data["X_calib"], data["y_calib"])
@@ -449,6 +486,14 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 6] = np.mean(compute_interval_length(icp_pred[cover_idx]))
+        
+        # deletting objects and removing from memory
+        del(icp)
+        del(new_model)
+        del(icp_valid)
+        del(icp_pred)
+        del(cover_idx)
+        gc.collect()
     
         # fitting wighted regression split
         start_weighted_split = time.time()
@@ -487,6 +532,12 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 7] = np.mean(compute_interval_length(wicp_pred[cover_idx]))
+        
+        del(wicp)
+        del(wicp_valid)
+        del(wicp_pred)
+        del(cover_idx)
+        gc.collect()
 
         start_weighted_split = time.time()
         micp = MondrianRegressionSplit(model, is_fitted = is_fitted, alpha = sig, k = nbins, **kwargs)
@@ -524,6 +575,12 @@ def compute_metrics(
         # interval length | coveraqe
         cover_idx = np.where(marg_cover == 1)
         mean_int_length_cover_vector[it, 8] = np.mean(compute_interval_length(micp_pred[cover_idx]))
+        
+        del(micp)
+        del(micp_valid)
+        del(micp_pred)
+        del(cover_idx)
+        gc.collect()
         
         if (it + 1) % 25 == 0 or (it + 1 == 1) or save_all:
           print("Saving data checkpoint on iteration {}".format(it + 1))

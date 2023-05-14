@@ -202,7 +202,7 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   g.map(plt.errorbar, "methods", "value", "sd", marker = "o")
   g.figure.subplots_adjust(wspace=0, hspace=0)
   g.add_legend(bbox_to_anchor = (1.1, 0.5), title = "Methods")
-  g.set_ylabels("Metric values")
+  g.set_ylabels("Smis values")
   g.set_xlabels("Methods")
   g.set_xticklabels(rotation = 45)
   g.set_titles(col_template="{col_name}")
@@ -248,7 +248,7 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   
   g.figure.subplots_adjust(wspace=0, hspace=0)
   g.add_legend(bbox_to_anchor = (1.1, 0.5), title = "Methods")
-  g.set_ylabels("Metric values")
+  g.set_ylabels("Marginal Coverage")
   g.set_xlabels("Methods")
   g.set_xticklabels(rotation = 45)
   g.set_titles(col_template="{col_name}")
