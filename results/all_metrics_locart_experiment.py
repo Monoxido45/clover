@@ -29,8 +29,9 @@ original_path = os.getcwd()
 def compute_metrics_sim(
   n_it = 100,
   n_train = 10000,
-  completing = False,
+  complete = False,
   iter_completing = 50,
+  p_completing = 3,
   kind = "homoscedastic",
   p = np.array([1, 3, 5]),
   d = 20,
@@ -53,7 +54,7 @@ def compute_metrics_sim(
   h = 20,
   m = 300,
   split_calib = False,
-  mad_model_cte = False,
+  split_mondrian = False,
   nbins = 30,
   criterion = "squared_error",
   max_depth = None,
@@ -71,8 +72,8 @@ def compute_metrics_sim(
     if "_V2" in kind:
       asym_value = 1.5
       kind = "asymmetric"
-      # folder_path = "/results/pickle_files/locart_all_metrics_experiments/{}_data_eta_{}".format(
-      #   kind, asym_value)
+      folder_path = "/results/pickle_files/locart_all_metrics_experiments/{}_data_eta_{}".format(
+      kind, asym_value)
     else:
       folder_path = "/results/pickle_files/locart_all_metrics_experiments/{}_data".format(
         kind)
@@ -87,6 +88,10 @@ def compute_metrics_sim(
     random_seeds_X = np.random.randint(0, 10**(8), n_it)
     
     for n_var in p:
+      if n_var == p_completing:
+        completing = complete
+      else:
+        completing = False
       # testing wheter we already have all saved
       # if not, we run all and save all together in the same folder
       var_path = "/{}_score_regression_p_{}_{}_samples_measures".format(kind, n_var, n_train)
@@ -125,6 +130,14 @@ def compute_metrics_sim(
           # estimated measures
           smis_vector, wsc_vector =  (np.load("smis_p_{}_{}_data.npy".format(
           n_var, kind)), np.load("wsc_p_{}_{}_data.npy".format(
+          n_var, kind)))
+          
+          mean_valid_pred_set, max_valid_pred_set = (np.load("mean_valid_pred_set_p_{}_{}_data.npy".format(
+          n_var, kind)), np.load("max_valid_pred_set_p_{}_{}_data.npy".format(
+          n_var, kind)))
+          
+          HSIC_vector, pcor_vector = (np.load("HSIC_p_{}_{}_data.npy".format(
+          n_var, kind)), np.load("pcor_p_{}_{}_data.npy".format(
           n_var, kind)))
         
           # running times
@@ -167,15 +180,19 @@ def compute_metrics_sim(
             y_mat = r_kind(X_test[:, 0], B = B_y)
           else:
             y_mat = r_kind(X_test, B = B_y)
+            
+          # fitting model
+          model = base_model(**kwargs).fit(data["X_train"], data["y_train"])
           
           # fitting all methods, saving running times and each metric
           # fitting normal locart
           start_loc = time.time()
           locart_obj = LocartSplit(nc_score = RegressionScore, cart_type = "CART", 
-          base_model = base_model, alpha = sig, split_calib = split_calib, **kwargs)
+          base_model = model, is_fitted = True, alpha = sig, split_calib = split_calib, **kwargs)
           locart_obj.fit(data["X_train"], data["y_train"])
           locart_obj.calib(data["X_test"], data["y_test"], max_depth = max_depth, 
-          max_leaf_nodes = max_leaf_nodes, min_samples_leaf = min_samples_leaf, criterion = criterion, prune_tree = prune, 
+          max_leaf_nodes = max_leaf_nodes, min_samples_leaf = min_samples_leaf, 
+          criterion = criterion, prune_tree = prune, 
           random_projections = random_projections, m = m, h = h)
           
           end_loc = time.time() - start_loc
@@ -192,7 +209,8 @@ def compute_metrics_sim(
       
       
           # valid pred sets
-          locart_valid = Valid_pred_sets(conf = locart_obj, alpha = sig, coverage_evaluator = "CART", prune = valid_prune, 
+          locart_valid = Valid_pred_sets(conf = locart_obj, alpha = sig, 
+          coverage_evaluator = "CART", prune = valid_prune, 
           split_train = valid_split)
           locart_valid.fit(X_test, y_test, test_size = valid_test_size, min_samples_leaf = valid_min_sample)
           mean_valid_pred_set[it, 0], max_valid_pred_set[it, 0] = locart_valid.compute_dif()
@@ -219,8 +237,8 @@ def compute_metrics_sim(
       
           # fitting normal RF-locart
           start_loc = time.time()
-          rf_locart_obj = LocartSplit(nc_score = RegressionScore, cart_type = "RF", base_model = base_model, 
-          alpha = sig, split_calib = split_calib, **kwargs)
+          rf_locart_obj = LocartSplit(nc_score = RegressionScore, cart_type = "RF", base_model = model, 
+          is_fitted = True, alpha = sig, split_calib = split_calib, **kwargs)
           rf_locart_obj.fit(data["X_train"], data["y_train"])
           rf_locart_obj.calib(data["X_test"], data["y_test"], max_depth = max_depth, 
           max_leaf_nodes = max_leaf_nodes, min_samples_leaf = min_samples_leaf, criterion = criterion, 
@@ -269,7 +287,7 @@ def compute_metrics_sim(
           # fitting normal difficulty locart
           start_loc = time.time()
           dlocart_obj = LocartSplit(nc_score = RegressionScore, cart_type = "CART", 
-          base_model = base_model, alpha = sig, split_calib = split_calib, weighting = True,**kwargs)
+          base_model = model, is_fitted = True, alpha = sig, split_calib = split_calib, weighting = True,**kwargs)
           dlocart_obj.fit(data["X_train"], data["y_train"])
           dlocart_obj.calib(data["X_test"], data["y_test"], max_depth = max_depth, 
           max_leaf_nodes = max_leaf_nodes, min_samples_leaf = min_samples_leaf, criterion = criterion, 
@@ -317,8 +335,8 @@ def compute_metrics_sim(
       
           # fitting RF difficulty locart
           start_loc = time.time()
-          rf_dlocart_obj = LocartSplit(nc_score = RegressionScore, cart_type = "RF", base_model = base_model, 
-          alpha = sig, split_calib = split_calib, weighting = True, **kwargs)
+          rf_dlocart_obj = LocartSplit(nc_score = RegressionScore, cart_type = "RF", base_model = model, 
+          is_fitted = True, alpha = sig, split_calib = split_calib, weighting = True, **kwargs)
           rf_dlocart_obj.fit(data["X_train"], data["y_train"])
           rf_dlocart_obj.calib(data["X_test"], data["y_test"], max_depth = max_depth, 
           max_leaf_nodes = max_leaf_nodes, min_samples_leaf = min_samples_leaf, criterion = criterion, 
@@ -366,9 +384,7 @@ def compute_metrics_sim(
       
           # fitting ACPI/LCP-RF
           start_loc = time.time()
-      
-          model = base_model(**kwargs)
-          model.fit(data["X_train"], data["y_train"])
+          
           acpi = ACPI(model_cali = model, n_estimators = 100)
           acpi.fit(data["X_test"], data["y_test"], nonconformity_func = None)
           acpi.fit_calibration(data["X_test"], data["y_test"], quantile = 1 - sig, only_qrf = True)
@@ -413,11 +429,12 @@ def compute_metrics_sim(
           # fitting wlocart
           start_loc = time.time()
       
-          wlocart_obj = LocartSplit(nc_score = LocalRegressionScore, cart_type = "RF", base_model = base_model, 
-          alpha = sig, split_calib = split_calib, **kwargs)
-          wlocart_obj.fit(data["X_train"], data["y_train"], mad_model_cte = mad_model_cte)
+          wlocart_obj = LocartSplit(nc_score = LocalRegressionScore, cart_type = "RF", base_model = model, 
+          is_fitted = True, alpha = sig, split_calib = split_calib, **kwargs)
+          wlocart_obj.fit(data["X_train"], data["y_train"])
           wlocart_obj.calib(data["X_test"], data["y_test"], max_depth = max_depth, 
-              max_leaf_nodes = max_leaf_nodes, min_samples_leaf = min_samples_leaf, criterion = criterion, prune_tree = prune,
+              max_leaf_nodes = max_leaf_nodes, min_samples_leaf = min_samples_leaf, 
+              criterion = criterion, prune_tree = prune,
               random_projections = random_projections, m = m, h = h)
           
           end_loc = time.time() - start_loc
@@ -467,7 +484,6 @@ def compute_metrics_sim(
       
           # fitting default regression split
           start_split = time.time()
-          model = base_model(**kwargs)
           nc = NcFactory.create_nc(model)
           icp = IcpRegressor(nc)
           icp.fit(data["X_train"], data["y_train"])
@@ -514,8 +530,9 @@ def compute_metrics_sim(
       
           # fitting wighted regression split
           start_weighted_split = time.time()
-          wicp = LocalRegressionSplit(base_model, alpha = sig, **kwargs)
-          wicp.fit(data["X_train"], data["y_train"], mad_model_cte = mad_model_cte)
+          wicp = LocalRegressionSplit(base_model = model, 
+          is_fitted = True, alpha = sig, **kwargs)
+          wicp.fit(data["X_train"], data["y_train"])
           wicp.calibrate(data["X_test"], data["y_test"])
       
           end_weighted_split = time.time() - start_weighted_split
@@ -557,9 +574,10 @@ def compute_metrics_sim(
           )
 
           start_weighted_split = time.time()
-          micp = MondrianRegressionSplit(base_model, alpha = sig, k = nbins, **kwargs)
+          micp = MondrianRegressionSplit(base_model = model, 
+          is_fitted = True, alpha = sig, k = nbins, **kwargs)
           micp.fit(data["X_train"], data["y_train"])
-          micp.calibrate(data["X_test"], data["y_test"])
+          micp.calibrate(data["X_test"], data["y_test"], split = split_mondrian)
       
           end_weighted_split = time.time() - start_weighted_split
           times[it, 8] = end_weighted_split
@@ -695,8 +713,9 @@ def saving_metrics(
 def compute_all_conformal_metrics(
   kinds_list = ["homoscedastic", "heteroscedastic", "asymmetric", "asymmetric_V2", "t_residuals", "non_cor_heteroscedastic"],
   base_model = RandomForestRegressor,
-  completing = False,
+  complete = False,
   iter_completing = 50,
+  p_completing = 3,
   save_all = True,
   n_it = 100,
   p = np.array([1,3,5]),
@@ -707,13 +726,13 @@ def compute_all_conformal_metrics(
     times_list = list()
     if type(kinds_list) == list:
       for kinds in kinds_list:
-        times_list.append(compute_metrics_sim(kind = kinds, n_it = n_it, completing = completing,
+        times_list.append(compute_metrics_sim(kind = kinds, n_it = n_it, complete = complete,
         iter_completing = iter_completing, save_all = save_all, p = p, d = d, **kwargs))
       end_exp = time.time() - start_exp
       print("Time elapsed to conduct all experiments: {}".format(end_exp))
       np.save("results/pickle_files/locart_all_metrics_experiments/sim_running_times.npy", np.array(times_list.append(end_exp)))
     else:
-      compute_metrics_sim(kind = kinds_list, completing = completing,
+      compute_metrics_sim(kind = kinds_list, complete = completing,
         iter_completing = iter_completing, n_it = n_it, p = p, d = d, **kwargs)
       end_exp = time.time() - start_exp
       print("Time elapsed to conduct {} experiments: {}".format(kinds_list, end_exp))
@@ -727,10 +746,21 @@ if __name__ == '__main__':
   separated = input("Would you like to run each setting in separated terminals? ")
   if separated == "yes":
     kind = input("What kind of data would you like to simulate? ")
+    interrupted = input("Did you interrupted the program at some point earlier?")
+    if interrupted == "yes":
+      p = int(input("In which p did you stop?"))
+      completing = True
+      iter_complete = int(input("In which iteration did you stop?"))
+    
   if model == "Random Forest":
     random_state = 650
     if separated == "yes":
-      compute_all_conformal_metrics(kinds_list = kind, random_state = random_state)
+      if interrupted == "yes":
+        compute_all_conformal_metrics(kinds_list = kind, complete = completing,
+        p_completing = p, iter_completing = iter_complete,
+        random_state = random_state)
+      else:
+        compute_all_conformal_metrics(kinds_list = kind, random_state = random_state)
     else:
       compute_all_conformal_metrics(random_state = random_state)
   elif model == "KNN":
