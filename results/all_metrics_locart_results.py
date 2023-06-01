@@ -44,9 +44,11 @@ other_asym = False):
   hsic, pcor, smis, wsc = "HSIC", "pcor", "smis", "wsc"
   
   # name of each method
-  methods = ["locart", "RF-locart", "Dlocart", "RF-Dlocart", "LCP-RF", "Wlocart", "icp", "wicp", "mondrian"]
+  methods = ["locart", "loforest", "A-locart", "A-loforest", "QRF-TC", "W-locart", "reg-split", 
+  "W-reg-split", "mondrian"]
   
-  string_names = [mean_diff, median_diff, max_diff, smis, wsc, hsic, pcor, mean_valid, max_valid, mean_int, mean_coverage]
+  string_names = [mean_diff, median_diff, max_diff, smis, wsc, hsic, pcor, mean_valid, max_valid, 
+  mean_int, mean_coverage]
   
   # checking if path exists and then importing all data matrices
   if path.exists(original_path + folder_path):
@@ -132,7 +134,8 @@ other_asym = False):
   string = "run_times"
   
   # name of each method
-  methods = ["locart", "RF-locart", "Dlocart", "RF-Dlocart", "LCP-RF", "Wlocart", "icp", "wicp", "mondrian"]
+  methods = ["locart", "loforest", "A-locart", "A-loforest", "QRF-TC", "W-locart", "reg-split", 
+  "W-reg-split", "mondrian"]
   
   # checking if path exists and then importing all data matrices
   if path.exists(original_path + folder_path):
@@ -220,7 +223,7 @@ def plot_results_by_methods(kind,
 p = np.array([1,3,5]),
 images_dir = "results/metric_figures",
 vars_to_plot = np.array(["mean_diff", "smis", "wsc", "mean_valid_pred_set"]),
-vars_corr = np.array(["smis", "mean_valid_pred_set", "wsc", "pcor", "HSIC", "mean_diff", "max_diff"]),
+vars_corr = np.array(["smis", "wsc", "pcor", "HSIC", "mean_diff"]),
 other_vars = np.array(["mean_coverage", "mean_interval_length"]),
 exp_path = "/results/pickle_files/locart_all_metrics_experiments/",
 other_asym = False):
@@ -248,7 +251,8 @@ other_asym = False):
   
   # ordering data by custom order
   method_custom_order = CategoricalDtype(
-    ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"], 
+    ["locart", "A-locart", "reg-split", "W-reg-split", "mondrian",
+    "loforest", "A-loforest", "W-locart", "QRF-TC"], 
     ordered=True)
   
   # sorting according to the custom order
@@ -357,7 +361,7 @@ other_asym = False):
   # using same data than before
   g = sns.FacetGrid(data_final.
   query("stats in @vars_to_plot"), col = "stats", col_wrap = 2, hue = "methods",
-  hue_order =["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"],
+  hue_order =["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wloforest", "LCP-RF", "icp", "wicp", "mondrian"],
   despine = False, margin_titles = True, legend_out = True,
   sharey = False,
   height = 5)
@@ -405,7 +409,7 @@ if __name__ == '__main__':
         kind)).assign(kind = kind_name))
   
   props_time_all = pd.concat(time_data_list)
-  vars_corr = np.array(["smis", "mean_valid_pred_set", "wsc", "pcor", "HSIC", "mean_diff", "max_diff"])
+  vars_corr = np.array(["smis", "wsc", "pcor", "HSIC", "mean_diff"])
     
   images_dir = "results/metric_figures"
   figname_p = "performance_vs_p/general_regression_experiments"
@@ -415,8 +419,9 @@ if __name__ == '__main__':
   marginal_cover = "performance_other/general_marginal_coverage"
   
   method_custom_order = CategoricalDtype(
-  ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"], 
-  ordered=True)
+    ["locart", "A-locart", "reg-split", "W-reg-split", "mondrian",
+    "loforest", "A-loforest", "W-loforest", "QRF-TC"], 
+    ordered=True)
   
   props_time_all['methods'] = props_time_all['methods'].astype(method_custom_order)
   data_final = (pd.concat(data_final_list).
@@ -434,7 +439,8 @@ if __name__ == '__main__':
   sharey = False,
   height = 5)
   g.map(sns.pointplot, "p_var", "value", "methods", 
-  hue_order =  ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"],
+  hue_order =  ["locart", "A-locart", "reg-split", "weighted reg-split", "mondrian",
+    "loforest", "A-loforest", "W-loforest", "QRF-TC"],
   marker = "o",
   palette = "tab10",
   scale = 0.75)
@@ -463,32 +469,56 @@ if __name__ == '__main__':
   plt.savefig(f"{images_dir}/{marginal_cover}.pdf", bbox_inches="tight")
   
   
-  # barplot graph with frequency of methods with better mean difference
-  data_count_mean_diff = (data_final.
+  # barplot graph with frequency of methods with better mean difference]
+  conf_methods = ["locart", "A-locart", "reg-split", "weighted reg-split", "mondrian"]
+  data_final["methods"] = data_final["methods"].astype(method_custom_order)
+  data_final = data_final.assign(conformal = lambda df: df['methods'].map(
+    lambda methods: True if methods in conf_methods else False))
+  
+  
+  data_count_mean_diff_all = (data_final.
   query("stats == 'mean_diff'").
   groupby(['p_var', 'kind']).
-  apply(lambda df: df.nsmallest(n = 2, columns = 'value')).
+  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
   value_counts("methods"))
   
-  # now with better smis
-  data_count_smis = (pd.concat(data_final_list).
-  query("stats == 'smis'").
+  data_count_mean_diff_conf = (data_final.
+  query("stats == 'mean_diff'").
+  query("conformal == True").
+  assign(methods = lambda df: df.methods.values.remove_categories(["loforest", 
+  "A-loforest", "QRF-TC", "W-loforest"])).
   groupby(['p_var', 'kind']).
-  apply(lambda df: df.nsmallest(n = 2, columns = 'value')).
+  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
+  value_counts("methods"))
+  
+  data_count_mean_diff_no_conf = (data_final.
+  query("stats == 'mean_diff'").
+  query("conformal == False").
+  assign(methods = lambda df: df.methods.values.remove_categories(["locart", 
+  "A-locart", "reg-split", "weighted reg-split", "mondrian"])).
+  groupby(['p_var', 'kind']).
+  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
   value_counts("methods"))
   
   # plotting count of data into two barplots
-  fig, (ax1, ax2) = plt.subplots(nrows = 1, ncols = 2, figsize = (10, 6))
-  ax1.bar(x = data_count_mean_diff.keys(), height = data_count_mean_diff.values,
+  fig, (ax1, ax2, ax3) = plt.subplots(nrows = 1, ncols = 3, figsize = (14, 8))
+  ax3.bar(x = data_count_mean_diff_all.keys(), height = data_count_mean_diff_all.values,
   color = "tab:blue", alpha = 0.5)
-  ax1.set_title("Mean difference")
+  ax3.set_title("All methods")
+  ax3.set_xlabel("Methods")
+  ax3.set_ylabel("Frequency")
+  ax3.tick_params(axis = "x", labelrotation=45)
+
+  ax1.bar(x = data_count_mean_diff_conf.keys(), height = data_count_mean_diff_conf.values,
+  color = "tab:blue", alpha = 0.5)
+  ax1.set_title("Conformal methods")
   ax1.set_xlabel("Methods")
   ax1.set_ylabel("Frequency")
   ax1.tick_params(axis = "x", labelrotation=45)
-
-  ax2.bar(x = data_count_smis.keys(), height = data_count_smis.values,
+  
+  ax2.bar(x = data_count_mean_diff_no_conf.keys(), height = data_count_mean_diff_no_conf.values,
   color = "tab:blue", alpha = 0.5)
-  ax2.set_title("Smis")
+  ax2.set_title("Non conformal methods")
   ax2.set_xlabel("Methods")
   ax2.set_ylabel("Frequency")
   ax2.tick_params(axis = "x", labelrotation=45)
@@ -541,7 +571,7 @@ if __name__ == '__main__':
   plt.yscale('log')
   plt.yticks([0.01, 0.1, 0.5, 1])
   plt.xticks(rotation = 45)
-  plt.legend(bbox_to_anchor = (1.115, 0.55), title = "Methods")
+  plt.legend(bbox_to_anchor = (1.15, 0.55), title = "Methods")
   plt.savefig(f"{images_dir}/{fig_times_prop}.pdf", bbox_inches="tight")
   
   plt.close('all')

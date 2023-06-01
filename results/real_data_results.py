@@ -6,6 +6,7 @@ import os
 from os import path
 import pandas as pd
 from pandas.api.types import CategoricalDtype
+import matplotlib.ticker as tkr
 
 # 9 columns in raw data
 # first column is normal locart
@@ -39,7 +40,7 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   hsic, pcor, smis = "HSIC", "pcor", "smis"
   
   # name of each method
-  methods = ["locart", "RF-locart", "Dlocart", "RF-Dlocart", "LCP-RF", "Wlocart", "icp", "wicp", "mondrian"]
+  methods = ["locart", "loforest", "A-locart", "A-loforest", "LCP-RF", "W-locart", "icp", "wicp", "mondrian"]
   
   string_names = [smis, hsic, pcor, mean_valid, max_valid, mean_int, mean_int_cover, mean_coverage]
   
@@ -103,7 +104,7 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   string = "run_times"
   
   # name of each method
-  methods = ["locart", "RF-locart", "Dlocart", "RF-Dlocart", "LCP-RF", "Wlocart", "icp", "wicp", "mondrian"]
+  methods = ["locart", "loforest", "A-locart", "A-loforest", "LCP-RF", "W-locart", "icp", "wicp", "mondrian"]
   
   # checking if path exists and then importing all data matrices
   if path.exists(original_path + folder_path):
@@ -184,11 +185,15 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   
   # ordering data by custom order
   method_custom_order = CategoricalDtype(
-    ["locart", "Dlocart", "RF-locart", "RF-Dlocart", "Wlocart", "LCP-RF", "icp", "wicp", "mondrian"], 
+    ["locart", "A-locart", "reg-split", "W-reg-split", "mondrian", "loforest", "A-loforest", "W-loforest", "QRF-TC"], 
     ordered=True)
+    
+  conf_methods = ["locart", "A-locart", "reg-split", "W-reg-split", "mondrian"]
   
   # sorting according to the custom order
   data_main['methods'] = data_main['methods'].astype(method_custom_order)
+  data_main = data_main.assign(conformal = lambda df: df['methods'].map(
+    lambda methods: True if methods in conf_methods else False))
   time_data['methods'] = time_data['methods'].astype(method_custom_order)
   
   
@@ -200,30 +205,76 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   sharey = False,
   height = 5)
   g.map(plt.errorbar, "methods", "value", "sd", marker = "o")
+  g.map(plt.axvline, x = 4.5, color = 'k', linestyle = "dashed")
   g.figure.subplots_adjust(wspace=0, hspace=0)
   g.add_legend(bbox_to_anchor = (1.1, 0.5), title = "Methods")
-  g.set_ylabels("Smis values")
+  g.set_ylabels("SMIS values")
   g.set_xlabels("Methods")
   g.set_xticklabels(rotation = 45)
   g.set_titles(col_template="{col_name}")
+  
+  # transforming some labels into bold
+  for ax in g.axes.flatten():
+    if len(ax.get_xticklabels()) != 0:
+      for idx in [0,1,5,6,7]:
+        ax.get_xticklabels()[idx].set_fontweight("bold")
+      
   plt.tight_layout()
   plt.savefig(f"{images_dir}/{figname}.pdf", bbox_inches="tight")
   
   # plotting methods with best performance in barplot
   # now with better smis
-  data_count_smis = (data_main.
+  data_count_smis_conf = (data_main.
+  query("stats == 'smis'").
+  query("conformal == True").
+  assign(methods = lambda df: df.methods.values.remove_categories(["loforest", 
+  "A-loforest", "LCP-RF", "W-locart"])).
+  groupby(['data']).
+  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
+  value_counts("methods"))
+  
+  data_count_smis_no_conf = (data_main.
+  query("stats == 'smis'").
+  query("conformal == False").
+   assign(methods = lambda df: df.methods.values.remove_categories(["locart", "A-locart", 
+   "icp", "wicp", "mondrian"])).
+  groupby(['data']).
+  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
+  value_counts("methods"))
+  
+  data_count_smis_all = (data_main.
   query("stats == 'smis'").
   groupby(['data']).
-  apply(lambda df: df.nsmallest(n = 2, columns = 'value')).
+  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
   value_counts("methods"))
   
   # plotting count of data into two barplots
-  plt.figure(figsize = (12, 10))
-  plt.bar(x = data_count_smis.keys(), height = data_count_smis.values,
+  fig, (ax1, ax2, ax3) = plt.subplots(nrows = 1, ncols = 3, figsize = (14, 8))
+  ax1.bar(x = data_count_smis_conf.keys(), 
+  height = data_count_smis_conf.values,
   color = "tab:blue", alpha = 0.5)
-  plt.xlabel("Methods")
-  plt.ylabel("Frequency")
-  plt.tick_params(axis = "x", labelrotation = 45)
+  ax1.set_title("Conformal methods")
+  ax1.set_xlabel("Methods")
+  ax1.set_ylabel("Frequency")
+  ax1.tick_params(axis = "x", labelrotation=45)
+
+  ax2.bar(x = data_count_smis_no_conf.keys(), 
+  height = data_count_smis_no_conf.values,
+  color = "tab:blue", alpha = 0.5)
+  ax2.set_title("Non conformal methods")
+  ax2.set_xlabel("Methods")
+  ax2.set_ylabel("Frequency")
+  ax2.tick_params(axis = "x", labelrotation=45)
+  
+  ax3.bar(x = data_count_smis_all.keys(), 
+  height = data_count_smis_all.values,
+  color = "tab:blue", alpha = 0.5)
+  ax3.set_title("All methods")
+  ax3.set_xlabel("Methods")
+  ax3.set_ylabel("Frequency")
+  ax3.tick_params(axis = "x", labelrotation=45)
+  
+  plt.tight_layout()
   plt.savefig(f"{images_dir}/{barplot_res}.pdf")
   
   # plotting time proportions boxplot
@@ -258,6 +309,16 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   # returning data final to plot more general graphs
   return(data_main)
 
-plot_results(data_names)
+used_data = plot_results(data_names)
+
+# returning table only with smis
+smis_data = used_data.query("stats == 'smis'").round(4)
+smis_data["value_sd"] = smis_data["value"].map(str) + "\n (" + smis_data["sd"].map(str) + ")"
+# pivoting methods and smis
+a = smis_data.pivot(index = "data",
+columns = "methods",
+values = "value_sd")
 
 
+# rounding and putting sd in parenthesis
+a.to_csv("temp")
