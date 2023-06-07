@@ -40,7 +40,8 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   hsic, pcor, smis = "HSIC", "pcor", "smis"
   
   # name of each method
-  methods = ["locart", "loforest", "A-locart", "A-loforest", "LCP-RF", "W-locart", "icp", "wicp", "mondrian"]
+  methods = ["locart", "loforest", "A-locart", "A-loforest", "QRF-TC", "W-loforest", "reg-split", "W-reg-split", 
+  "mondrian"]
   
   string_names = [smis, hsic, pcor, mean_valid, max_valid, mean_int, mean_int_cover, mean_coverage]
   
@@ -104,7 +105,8 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   string = "run_times"
   
   # name of each method
-  methods = ["locart", "loforest", "A-locart", "A-loforest", "LCP-RF", "W-locart", "icp", "wicp", "mondrian"]
+  methods = ["locart", "loforest", "A-locart", "A-loforest", "QRF-TC", "W-loforest", "reg-split", 
+  "W-reg-split", "mondrian"]
   
   # checking if path exists and then importing all data matrices
   if path.exists(original_path + folder_path):
@@ -114,11 +116,17 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
       # importing the data
     current_folder = original_path + folder_path + "/{}_data_score_regression_measures".format(data_name)
     
+    # importing the correction
+    correction_folder = original_path + folder_path + "/{}_data_score_regression_model_time".format(data_name)
+    
     # only one string name
     current_data = np.load(current_folder + "/" + string + "_{}_data.npy".format(data_name))
+    correction_data = np.load(correction_folder + "/" + "model_running_time_{}_data.npy".format(data_name))
     
     # removing rows with only zeroes
     current_data = current_data[~np.all(current_data == 0, axis = 1)]
+    
+    current_data[:,6] = np.abs(current_data[:,6] - correction_data)
     
     # obtaining proportions by row
     prop_data = current_data/np.sum(current_data, axis = 1)[:, None]
@@ -165,6 +173,7 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   barplot_res = "performance_real/smis_barplot"
   run_time_prop = "performance_real/running_time_plot"
   
+  our_methods = ["locart", "A-locart", "loforest", "A-loforest", "W-loforest"]
   data_list = []
   time_data_list = []
   for name in data_names_list:
@@ -185,7 +194,8 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   
   # ordering data by custom order
   method_custom_order = CategoricalDtype(
-    ["locart", "A-locart", "reg-split", "W-reg-split", "mondrian", "loforest", "A-loforest", "W-loforest", "QRF-TC"], 
+    ["locart", "A-locart", "reg-split", "W-reg-split", 
+    "mondrian", "loforest", "A-loforest", "W-loforest", "QRF-TC"], 
     ordered=True)
     
   conf_methods = ["locart", "A-locart", "reg-split", "W-reg-split", "mondrian"]
@@ -208,6 +218,11 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   g.map(plt.axvline, x = 4.5, color = 'k', linestyle = "dashed")
   g.figure.subplots_adjust(wspace=0, hspace=0)
   g.add_legend(bbox_to_anchor = (1.1, 0.5), title = "Methods")
+  legend = g.legend
+  for text in legend.get_texts():
+    if text.get_text() in our_methods:
+      text.set_fontweight("bold")
+      
   g.set_ylabels("SMIS values")
   g.set_xlabels("Methods")
   g.set_xticklabels(rotation = 45)
@@ -224,11 +239,17 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   
   # plotting methods with best performance in barplot
   # now with better smis
+  data_count_smis_all = (data_main.
+  query("stats == 'smis'").
+  groupby(['data']).
+  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
+  value_counts("methods"))
+  
   data_count_smis_conf = (data_main.
   query("stats == 'smis'").
   query("conformal == True").
   assign(methods = lambda df: df.methods.values.remove_categories(["loforest", 
-  "A-loforest", "LCP-RF", "W-locart"])).
+  "A-loforest", "QRF-TC", "W-loforest"])).
   groupby(['data']).
   apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
   value_counts("methods"))
@@ -237,19 +258,13 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   query("stats == 'smis'").
   query("conformal == False").
    assign(methods = lambda df: df.methods.values.remove_categories(["locart", "A-locart", 
-   "icp", "wicp", "mondrian"])).
-  groupby(['data']).
-  apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
-  value_counts("methods"))
-  
-  data_count_smis_all = (data_main.
-  query("stats == 'smis'").
+   "reg-split", "W-reg-split", "mondrian"])).
   groupby(['data']).
   apply(lambda df: df.nsmallest(n = 1, columns = 'value', keep = "all")).
   value_counts("methods"))
   
   # plotting count of data into two barplots
-  fig, (ax1, ax2, ax3) = plt.subplots(nrows = 1, ncols = 3, figsize = (14, 8))
+  fig, (ax1, ax2, ax3) = plt.subplots(nrows = 1, ncols = 3, figsize = (12, 6))
   ax1.bar(x = data_count_smis_conf.keys(), 
   height = data_count_smis_conf.values,
   color = "tab:blue", alpha = 0.5)
@@ -257,6 +272,8 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   ax1.set_xlabel("Methods")
   ax1.set_ylabel("Frequency")
   ax1.tick_params(axis = "x", labelrotation=45)
+  for idx in [0,4]:
+    ax1.get_xticklabels()[idx].set_fontweight("bold")
 
   ax2.bar(x = data_count_smis_no_conf.keys(), 
   height = data_count_smis_no_conf.values,
@@ -265,6 +282,8 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   ax2.set_xlabel("Methods")
   ax2.set_ylabel("Frequency")
   ax2.tick_params(axis = "x", labelrotation=45)
+  for idx in [0,2,3]:
+    ax2.get_xticklabels()[idx].set_fontweight("bold")
   
   ax3.bar(x = data_count_smis_all.keys(), 
   height = data_count_smis_all.values,
@@ -273,17 +292,22 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   ax3.set_xlabel("Methods")
   ax3.set_ylabel("Frequency")
   ax3.tick_params(axis = "x", labelrotation=45)
+  for idx in [0,2,3,4,8]:
+    ax3.get_xticklabels()[idx].set_fontweight("bold")
   
   plt.tight_layout()
   plt.savefig(f"{images_dir}/{barplot_res}.pdf")
   
   # plotting time proportions boxplot
-  plt.figure(figsize = (14, 10))
-  sns.pointplot(data = time_data, x = "data", y = "value", hue = "methods", 
-  dodge = True, join=False, errorbar=('ci', 90), orient = "v", marker = "o", scale = 0.65)
-  plt.legend(bbox_to_anchor = (1.025, 0.5), title = "Methods")
+  plt.figure(figsize = (12, 8))
+  sns.barplot(data = time_data, x = "data", y = "value", hue = "methods", 
+  dodge = True)
+  legend = plt.legend(bbox_to_anchor = (1.025, 0.5), title = "Methods")
+  for text in legend.get_texts():
+    if text.get_text() in our_methods:
+      text.set_fontweight("bold")
   plt.xlabel("Data")
-  plt.ylabel("Running time proportions")
+  plt.ylabel("Running time proportions (log scale)")
   plt.yscale('log')
   plt.xticks(rotation = 45)
   plt.savefig(f"{images_dir}/{run_time_prop}.pdf", bbox_inches="tight")
@@ -296,17 +320,30 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   height = 5)
   g.map(plt.errorbar, "methods", "value", "sd", marker = "o")
   g.map(plt.axhline, y = 0.9, ls='--', c='red')
+  g.map(plt.axvline, x = 4.5, color = 'k', linestyle = "dashed")
   
   g.figure.subplots_adjust(wspace=0, hspace=0)
   g.add_legend(bbox_to_anchor = (1.1, 0.5), title = "Methods")
+  legend = g.legend
+  for text in legend.get_texts():
+    if text.get_text() in our_methods:
+      text.set_fontweight("bold")
+      
   g.set_ylabels("Marginal Coverage")
   g.set_xlabels("Methods")
   g.set_xticklabels(rotation = 45)
   g.set_titles(col_template="{col_name}")
+  
+  for ax in g.axes.flatten():
+    if len(ax.get_xticklabels()) != 0:
+      for idx in [0,1,5,6,7]:
+        ax.get_xticklabels()[idx].set_fontweight("bold")
+        
   plt.tight_layout()
   plt.savefig(f"{images_dir}/{marginal_cover}.pdf", bbox_inches="tight")
   
   # returning data final to plot more general graphs
+  plt.close('all')
   return(data_main)
 
 used_data = plot_results(data_names)
