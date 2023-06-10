@@ -1,9 +1,17 @@
 import numpy as np
 from scipy import stats
 
+
 class simulation:
     def __init__(
-        self, dim=20, coef = 0.3, noise = True, signif_vars = 1, hetero_value=1, asym_value=0.6, t_degree=4
+        self,
+        dim=20,
+        coef=0.3,
+        noise=True,
+        signif_vars=1,
+        hetero_value=1,
+        asym_value=0.6,
+        t_degree=4,
     ):
         self.dim = dim
         self.coef = coef
@@ -23,7 +31,11 @@ class simulation:
         if self.noise:
             y = np.random.normal(self.coef * X[:, 0], scale=1, size=n)
         else:
-            y = np.random.normal(self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1), scale=1, size=n)
+            y = np.random.normal(
+                self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1),
+                scale=1,
+                size=n,
+            )
         self.X, self.y = X, y
         self.kind = "homoscedastic"
 
@@ -33,9 +45,9 @@ class simulation:
         if self.noise:
             y = (self.coef * X[:, 0]) + np.random.standard_t(self.t_degree, size=n)
         else:
-            y = (self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1)) + np.random.standard_t(
-                self.t_degree, size=n
-            )
+            y = (
+                self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1)
+            ) + np.random.standard_t(self.t_degree, size=n)
         self.X, self.y = X, y
         self.kind = "t_residuals"
 
@@ -61,9 +73,19 @@ class simulation:
                 size=n,
             )
         else:
-            y = (self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1)) + np.random.gamma(
-                1 + (self.asym_value * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))),
-                1 + (self.asym_value * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))),
+            y = (
+                self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1)
+            ) + np.random.gamma(
+                1
+                + (
+                    self.asym_value
+                    * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))
+                ),
+                1
+                + (
+                    self.asym_value
+                    * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))
+                ),
                 size=n,
             )
         self.X, self.y = X, y
@@ -91,7 +113,8 @@ class simulation:
             y = np.random.normal(
                 self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1),
                 scale=np.sqrt(
-                    self.hetero_value + self.coef * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))
+                    self.hetero_value
+                    + self.coef * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))
                 ),
                 size=n,
             )
@@ -139,7 +162,8 @@ class simulation:
             y = np.random.normal(
                 1,
                 scale=np.sqrt(
-                    self.hetero_value + self.coef * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))
+                    self.hetero_value
+                    + self.coef * np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))
                 ),
                 size=n,
             )
@@ -164,7 +188,9 @@ class simulation:
                 y_mat[i, :] = np.random.normal(self.coef * X_grid[i], scale=1, size=B)
             else:
                 y_mat[i, :] = np.random.normal(
-                    self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]), scale=1, size=B
+                    self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]),
+                    scale=1,
+                    size=B,
                 )
         return y_mat
 
@@ -196,7 +222,9 @@ class simulation:
                 y_mat[i, :] = np.random.normal(
                     self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]),
                     scale=np.sqrt(
-                        self.hetero_value + self.coef * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
+                        self.hetero_value
+                        + self.coef
+                        * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
                     ),
                     size=B,
                 )
@@ -234,7 +262,9 @@ class simulation:
                 y_mat[i, :] = np.random.normal(
                     1,
                     scale=np.sqrt(
-                        self.hetero_value + self.coef * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
+                        self.hetero_value
+                        + self.coef
+                        * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
                     ),
                     size=B,
                 )
@@ -250,9 +280,19 @@ class simulation:
                     size=B,
                 )
             else:
-                y_mat[i, :] = (self.coef * np.mean(X_grid[i, np.arange(0, self.vars)])) + np.random.gamma(
-                    1 + (self.asym_value * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))),
-                    1 + (self.asym_value * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))),
+                y_mat[i, :] = (
+                    self.coef * np.mean(X_grid[i, np.arange(0, self.vars)])
+                ) + np.random.gamma(
+                    1
+                    + (
+                        self.asym_value
+                        * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
+                    ),
+                    1
+                    + (
+                        self.asym_value
+                        * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
+                    ),
                     size=B,
                 )
         return y_mat
@@ -276,3 +316,54 @@ class simulation:
 
     def fit(self, X, y, significance=0.05):
         return self.predict(X, significance)
+
+
+class toy_simulation:
+    def __init__(self, coef=0.3, hetero_value=1, asym_value=0.6, xlim=1):
+        self.coef = coef
+        self.hetero_value = hetero_value
+        self.asym_value = asym_value
+        self.xlim = xlim
+
+    def bimodal(self, n, random_seed=1250):
+        np.random.seed(random_seed)
+        X = np.random.uniform(low=0, high=self.xlim, size=(n, 1))
+        y = (X[:, 0] ** 2) + (
+            0.5
+            * np.random.normal(
+                -X[:, 0], np.sqrt((self.hetero_value ** 2) - (X[:, 0] ** 2)), size=n
+            )
+            + 0.5
+            * np.random.normal(
+                X[:, 0], np.sqrt((self.hetero_value ** 2) - (X[:, 0] ** 2)), size=n
+            )
+        )
+
+        self.X, self.y = X, y
+        self.kind = "bimodal"
+
+    def bimodal_r(self, X_grid, B=1000):
+        y_mat = np.zeros((X_grid.shape[0], B))
+        for i in range(X_grid.shape[0]):
+            y_mat[i, :] = np.random.normal(
+                X_grid[i] ** 2,
+                scale=np.sqrt((0.5) * ((self.hetero_value ** 2) - (X_grid[i] ** 2))),
+                size=B,
+            )
+        return y_mat
+
+    def bimodal_oracle(self, X_grid, B=1000, sig=0.1):
+        band = np.zeros((X_grid.shape[0], 2))
+        for i in range(X_grid.shape[0]):
+            sample = np.random.normal(
+                X_grid[i] ** 2,
+                scale=np.sqrt((0.5) * ((self.hetero_value ** 2) - (X_grid[i] ** 2))),
+                size=B,
+            )
+            band[i, 1], band[i, 0] = (
+                np.quantile(sample, (1 - (sig / 2))),
+                np.quantile(sample, (sig / 2)),
+            )
+
+        return band
+
