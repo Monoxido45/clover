@@ -183,6 +183,15 @@ data/raw/*
 # data backup
 all_data_backup.zip
 all_metric_figures.zip
+metric_figures.zip
+/metric_figures
 
 # all_metric_fiugres
 /all_metric_figures
+/metric_figures_v2
+/metric_figures_v2.zip
+
+
+# fast experiments
+/fast_experiments
+fast_experiments.zip
