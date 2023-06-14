@@ -532,7 +532,7 @@ class toy_simulation:
     def splitted_exp(self, n, random_seed=1250):
         np.random.seed(random_seed)
         X = np.random.uniform(low=0, high=self.xlim, size=(n, 1))
-        mad_exp = 2 / (np.exp(self.rate))
+        mad_exp = 2 / (np.exp(1)*self.rate)
         y = (
             X[:, 0] ** 2
             + ((X[:, 0] <= self.xlim / 2) * np.random.laplace(0, mad_exp, size=n))
@@ -547,7 +547,7 @@ class toy_simulation:
 
     def splitted_exp_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
-        mad_exp = 2 / (np.exp(self.rate))
+        mad_exp = 2 / (np.exp(1)*self.rate)
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= (self.xlim / 2):
@@ -559,7 +559,7 @@ class toy_simulation:
         return y_mat
 
     def splitted_exp_oracle(self, X_grid, sig=0.1, B=1000):
-        mad_beta = 2 / (np.exp(self.rate))
+        mad_beta = 2 / (np.exp(1)*self.rate)
         band = np.zeros((X_grid.shape[0], 2))
 
         for i in range(X_grid.shape[0]):
