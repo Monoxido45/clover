@@ -609,7 +609,7 @@ if __name__ == '__main__':
   plt.yscale('log')
   plt.yticks([0.01, 0.1, 0.5, 1])
   plt.xticks(rotation = 45)
-  legend = plt.legend(bbox_to_anchor = (1.15, 0.55), title = "Methods")
+  legend = plt.legend(bbox_to_anchor = (1.025, 0.5), title = "Methods")
   
   for text in legend.get_texts():
     if text.get_text() in our_methods:
