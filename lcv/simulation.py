@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import stats
-from scipy.special import erfinv, beta
+from scipy.special import erfinv, beta, betainc
 
 
 class simulation:
@@ -424,7 +424,7 @@ class toy_simulation:
     def splitted(self, n, random_seed=1250):
         np.random.seed(random_seed)
         X = np.random.uniform(low=0, high=self.xlim, size=(n, 1))
-        mad_norm = np.sqrt(self.hetero_value * 2) * erfinv(1 / 2)
+        mad_norm = np.sqrt(self.hetero_value * (2 / np.pi))
 
         y = (
             X[:, 0] ** 2
@@ -440,7 +440,7 @@ class toy_simulation:
 
     def splitted_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
-        mad_norm = np.sqrt(self.hetero_value * 2) * erfinv(1 / 2)
+        mad_norm = np.sqrt(self.hetero_value * (2 / np.pi))
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= (self.xlim / 2):
@@ -452,7 +452,7 @@ class toy_simulation:
         return y_mat
 
     def splitted_oracle(self, X_grid, sig=0.1, B=1000):
-        mad_norm = np.sqrt(self.hetero_value * 2) * erfinv(1 / 2)
+        mad_norm = np.sqrt(self.hetero_value * (2 / np.pi))
         band = np.zeros((X_grid.shape[0], 2))
 
         for i in range(X_grid.shape[0]):
@@ -471,10 +471,28 @@ class toy_simulation:
     def splitted_beta(self, n, random_seed=1250):
         np.random.seed(random_seed)
         X = np.random.uniform(low=0, high=self.xlim, size=(n, 1))
-        mad_beta = (2 * (self.alpha ** self.alpha) * (self.beta ** self.beta)) / (
-            beta(self.alpha, self.beta)
-            * ((self.alpha + self.beta) ** (self.alpha + self.beta + 1))
-        )
+        mad_beta = (
+            (
+                2
+                * self.alpha
+                * (
+                    betainc(
+                        self.alpha, self.beta, self.alpha / (self.beta + self.alpha)
+                    )
+                    * beta(self.alpha, self.beta)
+                )
+            )
+            - (
+                2
+                * (self.alpha + self.beta)
+                * (
+                    betainc(
+                        self.alpha + 1, self.beta, self.alpha / (self.beta + self.alpha)
+                    )
+                    * beta(self.alpha + 1, self.beta)
+                )
+            )
+        ) / ((self.alpha + self.beta) * beta(self.alpha, self.beta))
 
         y = (
             X[:, 0] ** 2
@@ -493,10 +511,28 @@ class toy_simulation:
 
     def splitted_beta_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
-        mad_beta = (2 * (self.alpha ** self.alpha) * (self.beta ** self.beta)) / (
-            beta(self.alpha, self.beta)
-            * ((self.alpha + self.beta) ** (self.alpha + self.beta + 1))
-        )
+        mad_beta = (
+            (
+                2
+                * self.alpha
+                * (
+                    betainc(
+                        self.alpha, self.beta, self.alpha / (self.beta + self.alpha)
+                    )
+                    * beta(self.alpha, self.beta)
+                )
+            )
+            - (
+                2
+                * (self.alpha + self.beta)
+                * (
+                    betainc(
+                        self.alpha + 1, self.beta, self.alpha / (self.beta + self.alpha)
+                    )
+                    * beta(self.alpha + 1, self.beta)
+                )
+            )
+        ) / ((self.alpha + self.beta) * beta(self.alpha, self.beta))
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= (self.xlim / 2):
@@ -509,10 +545,29 @@ class toy_simulation:
         return y_mat
 
     def splitted_beta_oracle(self, X_grid, sig=0.1, B=1000):
-        mad_beta = (2 * (self.alpha ** self.alpha) * (self.beta ** self.beta)) / (
-            beta(self.alpha, self.beta)
-            * ((self.alpha + self.beta) ** (self.alpha + self.beta + 1))
-        )
+        mad_beta = (
+            (
+                2
+                * self.alpha
+                * (
+                    betainc(
+                        self.alpha, self.beta, self.alpha / (self.beta + self.alpha)
+                    )
+                    * beta(self.alpha, self.beta)
+                )
+            )
+            - (
+                2
+                * (self.alpha + self.beta)
+                * (
+                    betainc(
+                        self.alpha + 1, self.beta, self.alpha / (self.beta + self.alpha)
+                    )
+                    * beta(self.alpha + 1, self.beta)
+                )
+            )
+        ) / ((self.alpha + self.beta) * beta(self.alpha, self.beta))
+
         band = np.zeros((X_grid.shape[0], 2))
 
         for i in range(X_grid.shape[0]):
@@ -532,7 +587,7 @@ class toy_simulation:
     def splitted_exp(self, n, random_seed=1250):
         np.random.seed(random_seed)
         X = np.random.uniform(low=0, high=self.xlim, size=(n, 1))
-        mad_exp = 2 / (np.exp(1)*self.rate)
+        mad_exp = 2 / (np.exp(1) * self.rate)
         y = (
             X[:, 0] ** 2
             + ((X[:, 0] <= self.xlim / 2) * np.random.laplace(0, mad_exp, size=n))
@@ -547,7 +602,7 @@ class toy_simulation:
 
     def splitted_exp_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
-        mad_exp = 2 / (np.exp(1)*self.rate)
+        mad_exp = 2 / (np.exp(1) * self.rate)
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= (self.xlim / 2):
@@ -559,7 +614,7 @@ class toy_simulation:
         return y_mat
 
     def splitted_exp_oracle(self, X_grid, sig=0.1, B=1000):
-        mad_beta = 2 / (np.exp(1)*self.rate)
+        mad_beta = 2 / (np.exp(1) * self.rate)
         band = np.zeros((X_grid.shape[0], 2))
 
         for i in range(X_grid.shape[0]):
@@ -568,6 +623,53 @@ class toy_simulation:
             else:
                 sample = X_grid[i] ** 2 + (
                     np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
+                )
+
+            band[i, 1], band[i, 0] = (
+                np.quantile(sample, (1 - (sig / 2))),
+                np.quantile(sample, (sig / 2)),
+            )
+        return band
+
+    def splitted_log(self, n, random_seed=1250):
+        np.random.seed(random_seed)
+        X = np.random.uniform(low=0, high=self.xlim, size=(n, 1))
+        mad_log = 2 * self.hetero_value * np.log(2)
+        y = (
+            X[:, 0] ** 2
+            + ((X[:, 0] <= self.xlim / 2) * np.random.laplace(0, mad_log, size=n))
+            + (
+                (X[:, 0] > self.xlim / 2)
+                * (np.random.logistic(0, self.hetero_value, size=n))
+            )
+        )
+
+        self.X, self.y = X, y
+        self.kind = "splitted_log"
+
+    def splitted_log_r(self, X_grid, B=1000):
+        y_mat = np.zeros((X_grid.shape[0], B))
+        mad_log = 2 * self.hetero_value * np.log(2)
+
+        for i in range(X_grid.shape[0]):
+            if X_grid[i] <= (self.xlim / 2):
+                y_mat[i, :] = np.random.laplace(X_grid[i] ** 2, scale=mad_log, size=B)
+            else:
+                y_mat[i, :] = X_grid[i] ** 2 + (
+                    np.random.logistic(0, self.hetero_value, size=B)
+                )
+        return y_mat
+
+    def splitted_log_oracle(self, X_grid, sig=0.1, B=1000):
+        mad_log = 2 * self.hetero_value * np.log(2)
+        band = np.zeros((X_grid.shape[0], 2))
+
+        for i in range(X_grid.shape[0]):
+            if X_grid[i] <= self.xlim / 2:
+                sample = np.random.laplace(X_grid[i] ** 2, scale=mad_log, size=B,)
+            else:
+                sample = X_grid[i] ** 2 + (
+                    np.random.logistic(0, self.hetero_value, size=B)
                 )
 
             band[i, 1], band[i, 0] = (
