@@ -176,6 +176,7 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
   our_methods = ["locart", "A-locart", "loforest", "A-loforest", "W-loforest"]
   data_list = []
   time_data_list = []
+  original_time_data_list = []
   for name in data_names_list:
     folder_path = exp_path + name + "_data"
     # first creating the data list to be plotted
@@ -188,9 +189,19 @@ exp_path = "/results/pickle_files/real_data_experiments/"):
     time_data = (pd.read_csv(original_path + folder_path + "/{}_prop_times.csv".format(name)).
     assign(data = name))
     time_data_list.append(time_data)
+    
+    original_time_data = (pd.read_csv(original_path + folder_path + "/{}_running_times.csv".format(name)).
+    assign(data = name))
+    original_time_data_list.append(original_time_data)
+    
   
   data_main = pd.concat(data_list)
+  original_time_data = pd.concat(original_time_data_list)
   time_data = pd.concat(time_data_list)
+  data_w = ["concrete", "protein"]
+  print(original_time_data.
+  query("data in @data_w").
+  groupby(["data", "methods"]).mean())
   
   # ordering data by custom order
   method_custom_order = CategoricalDtype(

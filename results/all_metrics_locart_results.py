@@ -155,13 +155,13 @@ other_asym = False):
       # only one string name
       current_data = np.load(current_folder + "/" + string + "_p_{}_{}_data.npy".format(p[i], kind))
       
-      correction = np.mean(np.load(correction_folder + "/" + "model_running_time" + "_p_{}_{}_data.npy".format(p[i], kind)))
+      correction = np.load(correction_folder + "/" + "model_running_time" + "_p_{}_{}_data.npy".format(p[i], kind))
       
       # removing rows with only zeroes
       current_data = current_data[~np.all(current_data == 0, axis = 1)]
       
       # subtracting ICP times from model
-      current_data[:, 6] = current_data[:, 6] - correction
+      current_data[:, 6] = np.abs(current_data[:,6] - correction)
       
       new_data = (pd.DataFrame(current_data,
       columns = methods).
@@ -401,6 +401,7 @@ if __name__ == '__main__':
   "T residuals", "Non-correlated heteroscedastic"]
   data_final_list = []
   time_data_list = []
+  abs_time_data_list = []
   # path to times data set
   exp_path = "/results/pickle_files/locart_all_metrics_experiments/"
   
@@ -414,13 +415,18 @@ if __name__ == '__main__':
         kind = kind_name))
       time_data_list.append(pd.read_csv(original_path + folder_path + "_eta_1.5" + "/{}_prop_times.csv".format(
         kind)).assign(kind = kind_name))
+      abs_time_data_list.append(pd.read_csv(original_path + folder_path + "_eta_1.5" + "/{}_running_times.csv".format(
+        kind)).assign(kind = kind_name))
     else:
       folder_path = exp_path + kind + "_data"
       data_final_list.append(plot_results_by_methods(kind, p = p).assign(kind = kind_name))
       time_data_list.append(pd.read_csv(original_path + folder_path + "/{}_prop_times.csv".format(
         kind)).assign(kind = kind_name))
+      abs_time_data_list.append(pd.read_csv(original_path + folder_path + "/{}_running_times.csv".format(
+        kind)).assign(kind = kind_name))
   
   props_time_all = pd.concat(time_data_list)
+  abs_time_all = pd.concat(abs_time_data_list)
   vars_corr = np.array(["smis", "wsc", "pcor", "HSIC", "mean_diff"])
     
   images_dir = "results/metric_figures"
@@ -618,6 +624,9 @@ if __name__ == '__main__':
   plt.savefig(f"{images_dir}/{fig_times_prop}.pdf", bbox_inches="tight")
   
   plt.close('all')
+  
+  # priting mean running times
+  print(abs_time_all.groupby(["methods"]).mean())
   
     
     
