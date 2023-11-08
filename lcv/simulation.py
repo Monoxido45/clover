@@ -321,7 +321,7 @@ class simulation:
 
 class toy_simulation:
     def __init__(
-        self, coef=0.3, hetero_value=1, asym_value=0.6, alpha=1, beta=1, xlim=1, rate=1
+        self, coef=0.3, hetero_value=1, asym_value=0.6, alpha=1, beta=1, xlim= np.array([0, 1]), rate=1
     ):
         self.coef = coef
         self.hetero_value = hetero_value
@@ -333,13 +333,15 @@ class toy_simulation:
 
     def bimodal(self, n, random_seed=1250):
         np.random.seed(random_seed)
-        X = np.random.uniform(low=0, high=self.xlim, size=(n, 1))
+        X = np.random.uniform(low= self.xlim[0], high=self.xlim[1], size=(n, 1))
+        # bernoulli for normal mixture
+        bern = np.random.binomial(n=1, p=0.5, size=n)
         y = (X[:, 0] ** 2) + (
-            0.5
+            (bern == 0)
             * np.random.normal(
                 -X[:, 0], np.sqrt((self.hetero_value ** 2) - (X[:, 0] ** 2)), size=n
             )
-            + 0.5
+            + (bern == 1)
             * np.random.normal(
                 X[:, 0], np.sqrt((self.hetero_value ** 2) - (X[:, 0] ** 2)), size=n
             )
@@ -351,9 +353,12 @@ class toy_simulation:
     def bimodal_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
         for i in range(X_grid.shape[0]):
+            # bernoulli for normal mixture
+            bern = np.random.binomial(n=1, p=0.5, size=B)
+
             y_mat[i, :] = np.random.normal(
-                X_grid[i] ** 2,
-                scale=np.sqrt((0.5) * ((self.hetero_value ** 2) - (X_grid[i] ** 2))),
+                X_grid[i] ** 2 + ((bern == 0) * -X_grid[i]) + ((bern == 1) * X_grid[i]),
+                scale=np.sqrt(((self.hetero_value ** 2) - (X_grid[i] ** 2))),
                 size=B,
             )
         return y_mat
