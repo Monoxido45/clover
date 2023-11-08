@@ -1,0 +1,13 @@
+axes.titlesize : 10
+axes.labelsize : 10
+axes.formatter.use_mathtext : True
+axes.formatter.useoffset      : True
+axes.formatter.limits: -2, 2
+font.family: sans-serif
+font.sans-serif: Computer Modern
+xtick.labelsize : 10
+ytick.labelsize : 10
+legend.loc : best
+legend.fontsize : 10
+figure.figsize : 5.4, 3
+savefig.format : pdf
