@@ -1,6 +1,4 @@
-# Local Calibration Validation
-Perfom local calibration validation by testing $H_0: \mathbb{P}(Y \in C(X)|X) = 1 - \alpha$
-
+# Local Coverage Regression Trees
 ## Instructions
 
 First, clone this repository. All scripts must be run from the root directory (`/lcv`).
