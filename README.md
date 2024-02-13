@@ -1,4 +1,4 @@
-# Local Coverage Regression Trees
+# Conformal Locally Valid interval-Estimates for Regression
 ## Instructions
 
 First, clone this repository. All scripts must be run from the root directory (`/lcv`).
