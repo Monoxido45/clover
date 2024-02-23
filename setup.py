@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 
 setup(
-    name="lcv",
+    name="clover",
     version="0.1",
     description="Conformal Locally Valid interval-Estimates for Regression",
     long_description=long_description,
