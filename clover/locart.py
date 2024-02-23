@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from operator import itemgetter
 import scipy.stats as st
 
-from lcv.scores import LocalRegressionScore, RegressionScore, QuantileScore
+from clover.scores import LocalRegressionScore, RegressionScore, QuantileScore
 
 
 class LocartSplit(BaseEstimator):
@@ -181,7 +181,10 @@ class LocartSplit(BaseEstimator):
                         res_train_prune,
                         res_test_prune,
                     ) = train_test_split(
-                        X_calib, res, test_size=0.5, random_state=prune_seed,
+                        X_calib,
+                        res,
+                        test_size=0.5,
+                        random_state=prune_seed,
                     )
 
                 optim_ccp = self.prune_tree(

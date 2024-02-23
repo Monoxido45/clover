@@ -1,20 +1,20 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-from lcv.cqr import ConformalizedQuantileRegression
-from lcv.locluster import KmeansSplit
-from lcv.locart import LocartSplit
-from lcv.models import QuantileGradientBoosting
-from lcv.scores import QuantileScore
-from lcv.simulation import simulation
-from lcv.utils import compute_interval_length, real_coverage
+from clover.cqr import ConformalizedQuantileRegression
+from clover.locluster import KmeansSplit
+from clover.locart import LocartSplit
+from clover.models import QuantileGradientBoosting
+from clover.scores import QuantileScore
+from clover.simulation import simulation
+from clover.utils import compute_interval_length, real_coverage
 
 seed = 100
 rng = np.random.RandomState(seed)
 
-n_train = 2000 
-n_test_X = 5 * 10 ** 3
-n_test_y = 10 ** 3
+n_train = 2000
+n_test_X = 5 * 10**3
+n_test_y = 10**3
 
 # Data
 dim = 20
@@ -67,13 +67,3 @@ locart_pred = locart.predict(X_test, length=2000)
 locart_cov = real_coverage(locart_pred, y_test)
 locart_len = compute_interval_length(locart_pred)
 print(np.mean(locart_cov), np.mean(locart_len))
-
-
-
-
-
-
-
-
-
-

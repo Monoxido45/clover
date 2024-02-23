@@ -3,7 +3,7 @@ from sklearn.base import BaseEstimator
 from sklearn.ensemble import GradientBoostingRegressor
 from quantile_forest import RandomForestQuantileRegressor
 from sklearn.utils.validation import check_is_fitted
-from lcv.scores import QuantileScore
+from clover.scores import QuantileScore
 
 
 class QuantileGradientBoosting(BaseEstimator):
