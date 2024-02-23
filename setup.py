@@ -7,15 +7,15 @@ with open("README.md", "r") as fh:
 setup(
     name="lcv",
     version="0.1",
-    description="Local Calibration Validation of conformal prediction methods",
+    description="Conformal Locally Valid interval-Estimates for Regression",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="#",
     author="Luben Miguel Cruz Cabezas",
     author_email="lucruz45.cab@gmail.com",
-    packages=["lcv"],
+    packages=["clover"],
     license="MIT",
-    keywords=["conformal prediction", "hypothesis testing", "local calibration"],
+    keywords=["prediction intervals", "conformal prediction", "local calibration"],
     install_requires=["numpy", "scikit-learn", "torch"],
     zip_safe=False,
 )
