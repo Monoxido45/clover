@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 from sklearn.base import clone
-from sklearn.model_selection import train_test_split
 
 
 # defining score basic class
@@ -31,13 +30,21 @@ class Scores(ABC):
 # regression score
 class RegressionScore(Scores):
     """
-    Non conformity regression score
+    Conformity score for regression (residuals)
     --------------------------------------------------------
-    base_model: point prediction model object
-        Base-model that will be used to compute non-conformity scores
+    Input: (i)    base_model: Point prediction model object with fit and predict methods.
+           (ii)   is_fitted: Boolean indicating if the regression model is already fitted.
     """
 
     def fit(self, X, y):
+        """
+        Fit the regression base model to training data
+        --------------------------------------------------------
+        Input: (i)    X: Training feature matrix.
+               (ii)   y: Training label vector.
+
+        Output: RegressionScore object
+        """
         if self.is_fitted:
             return self
         elif self.base_model is not None:
@@ -46,6 +53,14 @@ class RegressionScore(Scores):
             return self
 
     def compute(self, X_calib, y_calib):
+        """
+        Compute the conformity score in the calibration set
+        --------------------------------------------------------
+        Input: (i)    X_calib: Calibration feature matrix
+               (ii)   y_calib: Calibration label vector
+
+        Output: Conformity score vector
+        """
         if self.base_model is not None:
             pred = self.base_model.predict(X_calib)
             res = np.abs(pred - y_calib)
@@ -54,6 +69,14 @@ class RegressionScore(Scores):
             return np.abs(y_calib)
 
     def predict(self, X_test, cutoff):
+        """
+        Compute prediction intervals using each observation cutoffs.
+        --------------------------------------------------------
+        Input: (i)    X_test: Test feature matrix
+               (ii)   cutoff: Cutoff vector
+
+        Output: Prediction intervals for test sample.
+        """
         pred_mu = self.base_model.predict(X_test)
         pred = np.vstack((pred_mu - cutoff, pred_mu + cutoff)).T
         return pred
@@ -62,13 +85,22 @@ class RegressionScore(Scores):
 # local rgression score
 class LocalRegressionScore(Scores):
     """
-    Non conformity regression local-variant score
+    Local-variant conformity score for regression.
+    We now estimate the mean absolute deviation (mad) using the same specified base model.
     --------------------------------------------------------
-    base_model: point prediction model object
-        Base-model that will be used to compute non-conformity scores
+    Input: (i)    base_model: Point prediction model object with fit and predict methods.
+           (ii)   is_fitted: Boolean indicating if the regression model is already fitted.
     """
 
     def fit(self, X, y):
+        """
+        Fit the regression base model and mad model to training data
+        --------------------------------------------------------
+        Input: (i)    X: Training feature matrix.
+               (ii)   y: Training label vector.
+
+        Output: LocalRegressionScore object
+        """
         if not self.is_fitted:
             self.base_model.fit(X, y)
 
@@ -77,6 +109,14 @@ class LocalRegressionScore(Scores):
         return self
 
     def compute(self, X_calib, y_calib):
+        """
+        Compute the mad-weighted conformity score in the calibration set
+        --------------------------------------------------------
+        Input: (i)    X_calib: Calibration feature matrix
+               (ii)   y_calib: Calibration label vector
+
+        Output: Conformity score vector
+        """
         pred_reg = self.base_model.predict(X_calib)
         res_model = np.abs(y_calib - pred_reg)
         pred_mad = self.mad_model.predict(X_calib)
@@ -92,6 +132,14 @@ class LocalRegressionScore(Scores):
         return res
 
     def predict(self, X_test, cutoff):
+        """
+        Compute prediction intervals using each observation cutoffs and mad estimates.
+        --------------------------------------------------------
+        Input: (i)    X_test: Test feature matrix
+               (ii)   cutoff: Cutoff vector
+
+        Output: Prediction intervals for test sample.
+        """
         pred_mu = self.base_model.predict(X_test)
         pred_mad = self.mad_model.predict(X_test)
         pred = np.vstack(
@@ -104,24 +152,48 @@ class LocalRegressionScore(Scores):
 # need to specify only base-model
 class QuantileScore(Scores):
     """
-    Non conformity quantile score
+    Quantile conformity score
     --------------------------------------------------------
-    base_model: Quantilic model object
-        Base-model that will be used to compute non-conformity scores
+    Input: (i)    base_model: Point prediction model object with fit and predict methods.
+           (ii)   is_fitted: Boolean indicating if the regression model is already fitted.
     """
 
     def fit(self, X, y):
+        """
+        Fit the quantilic regression model to training data
+        --------------------------------------------------------
+        Input: (i)    X: Training feature matrix.
+               (ii)   y: Training label vector.
+
+        Output: RegressionScore object
+        """
         if not self.is_fitted:
             self.base_model.fit(X, y)
         return self
 
     def compute(self, X_calib, y_calib):
+        """
+        Compute the conformity score in the calibration set
+        --------------------------------------------------------
+        Input: (i)    X_calib: Calibration feature matrix
+               (ii)   y_calib: Calibration label vector
+
+        Output: Conformity score vector
+        """
         pred = self.base_model.predict(X_calib)
         scores = np.column_stack((pred[:, 0] - y_calib, y_calib - pred[:, 1]))
         res = np.max(scores, axis=1)
         return res
 
     def predict(self, X_test, cutoff):
+        """
+        Compute prediction intervals using each observation cutoffs.
+        --------------------------------------------------------
+        Input: (i)    X_test: Test feature matrix
+               (ii)   cutoff: Cutoff vector
+
+        Output: Prediction intervals for test sample.
+        """
         quantiles = self.nc_score.base_model.predict(X_test)
         pred = np.vstack((quantiles[:, 0] - cutoff, quantiles[:, 1] + cutoff)).T
         return pred

@@ -35,13 +35,13 @@ class LocartSplit(BaseEstimator):
     ):
         """
         Input: (i)    nc_score: Conformity score of choosing. It can be specified by choosing a conformal score class based on the Scores basic class.
-               (ii)   base_model: Base model with fit and predict methods to be fitted to non conformity score.
-               (iii)  alpha: float between 0 and 1 specifying the miscoverage level of resulting prediction region.
-               (iv)   base_model_type: Boolean indicating wether a interval prediction type of base_model is being used or not. Default is False.
+               (ii)   base_model: Base model with fit and predict methods to be embedded in the conformity score class.
+               (iii)  alpha: Float between 0 and 1 specifying the miscoverage level of resulting prediction region.
+               (iv)   base_model_type: Boolean indicating whether the base model ouputs quantiles or not. Default is False.
                (v)    forest: Set whether we should fit random forest instead of CART to the conformal score. Default is False
-               (vi)   split_calib: Boolean indicating whether we should split the calibration set into partitioning and cutoff set. Default is True
-               (vii)  **kwargs: keyword arguments passed to fit base_model
-               (viii) weighting: Boolean indicating whether we should augment the feature space with conditional variance estimates. Defatul is False.
+               (vi)   split_calib: Boolean designating if we should split the calibration set into partitioning and cutoff set. Default is True.
+               (vii)  **kwargs: keyword arguments passed to fit base_model.
+               (viii) weighting: Set whether we should augment the feature space with conditional variance estimates. Defatul is False.
         """
         self.base_model_type = base_model_type
         if ("Quantile" in str(nc_score)) or (base_model_type == True):
@@ -69,7 +69,7 @@ class LocartSplit(BaseEstimator):
                (iii)  random_seed_tree: Random Forest random seed for variance estimation (if weighting parameter is True)
                (iv)   **kwargs: Keyword arguments passed to fit the random forest used for variance estimation.
 
-        Output: None
+        Output: LocartSplit object
         """
         self.nc_score.fit(X, y)
         if self.weighting == True:
@@ -104,10 +104,11 @@ class LocartSplit(BaseEstimator):
         Input: (i)    X_calib: Calibration feature matrix
                (ii)   y_calib: Calibration label array
                (iii)  random_seed: Random seed for CART or Random Forest fitted to the confomity scores.
-               (iv)   prune_tree: Boolean indicatin whether CART tree should be pruned or not.
+               (iv)   prune_tree: Boolean indicating whether CART tree should be pruned or not.
                (v)    prune_seed: Random seed set for data splitting in the prune step.
                (vi)   cart_train_size: Proportion of calibration data used in partitioning.
-               (vii)  random_projections: Boolean indicating whether we should augment the feature space with random projections or random fourier features. Default is False.
+               (vii)  random_projections: Boolean specifying if we should augment the feature space with random projections or random fourier features.
+               Default is False.
                (viii) m: Number of random projections to augment feature space. Default is 1000.
                (ix)   h: Random projections scale. Default is 1.
                (x)    **kwargs: Keyword arguments to be passed to CART or Random Forest.
@@ -315,12 +316,12 @@ class LocartSplit(BaseEstimator):
         """
         Auxiliary function to conduct decision tree post pruning.
         --------------------------------------------------------
-        input: (i)    X_train: feature matrix used to fit decision trees for each cost complexity alpha values.
+        Input: (i)    X_train: feature matrix used to fit decision trees for each cost complexity alpha values.
                (ii)   X_valid: feature matrix used to validate each cost complexity path.
                (iii)  res_train: conformal scores used to fit decision trees for each cost complexity alpha values.
-               (iv)   res_valid: conformal scores used to validate each cost complexity path
+               (iv)   res_valid: conformal scores used to validate each cost complexity path.
 
-        output: Optimal cost complexity path to perform pruning.
+        Output: Optimal cost complexity path to perform pruning.
         """
         prune_path = self.cart.cost_complexity_pruning_path(X_train, res_train)
         ccp_alphas = prune_path.ccp_alphas
@@ -386,9 +387,9 @@ class LocartSplit(BaseEstimator):
         """
         Auxiliary function to retrieve the uniform cutoff index for new observations.
         --------------------------------------------------------
-        input: (i)    X: feature matrix
+        Input: (i)    X: feature matrix
 
-        output: Vector of indices.
+        Output: Vector of indices.
         """
         int_idx = np.zeros(X.shape[0])
         for i in range(X.shape[0]):
@@ -401,7 +402,7 @@ class LocartSplit(BaseEstimator):
         """
         Plot decision tree feature space partition
         --------------------------------------------------------
-        output: Decision tree plot object.
+        Output: Decision tree plot object.
         """
         if self.cart_type == "CART":
             plot_tree(self.cart, filled=True)
@@ -413,11 +414,11 @@ class LocartSplit(BaseEstimator):
         Predict 1 - alpha prediction intervals for each test sample using locart/loforest local cutoffs.
         Alternatively, this function can be used to obtain euclidean binning prediction intervals.
         --------------------------------------------------------
-        input: (i)    X: test feature matrix
+        Input: (i)    X: test feature matrix
                (ii)   type_model: String indicating the type of partitioning used to obtain local cutoffs. "Tree" sets the locart/loforest partitioning, while
                "euclidean" sets the euclidean binning. Default is "Tree".
 
-        output: Prediction intervals for each test sample.
+        Output: Prediction intervals for each test sample.
         """
         # identifying cutoff point
         if self.weighting:
