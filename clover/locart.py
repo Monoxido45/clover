@@ -17,20 +17,8 @@ from clover.scores import LocalRegressionScore, RegressionScore, QuantileScore
 
 class LocartSplit(BaseEstimator):
     """
-    Local CART split
+    Local Regression Tree or Local Forests
     ----------------------------------------------------------------
-    nc_score: class or function
-      Non conformity score of choosing with base model embeded on it. It can be specified by a class or function
-    base_model: Base model to be fitted to non conformity score
-    alpha: float between 0 and 1
-      Miscoverage level of resulting prediction region
-    base_model_type: Bool
-      Boolean indicating wether interval prediction base_model is being used or not. Default is None
-    cart_type: string
-      Which CART algorithm should be fitted. For now it is between "CART" and "RF"
-    split_calib: bool
-      Boolean indicating whether we split the calibration set into training and test set. Default is True
-    **kwargs: keyword arguments passed to fit base_model
     """
 
     def __init__(
@@ -45,6 +33,16 @@ class LocartSplit(BaseEstimator):
         weighting=False,
         **kwargs
     ):
+        """
+        Input: (i)    nc_score: Conformity score of choosing. It can be specified by choosing a conformal score class based on the Scores basic class.
+               (ii)   base_model: Base model with fit and predict methods to be fitted to non conformity score.
+               (iii)  alpha: float between 0 and 1 specifying the miscoverage level of resulting prediction region.
+               (iv)   base_model_type: Boolean indicating wether a interval prediction type of base_model is being used or not. Default is False.
+               (v)    forest: Set whether we should fit random forest instead of CART to the conformal score. Default is False
+               (vi)   split_calib: Boolean indicating whether we should split the calibration set into partitioning and cutoff set. Default is True
+               (vii)  **kwargs: keyword arguments passed to fit base_model
+               (viii) weighting: Boolean indicating whether we should augment the feature space with conditional variance estimates. Defatul is False.
+        """
         self.base_model_type = base_model_type
         if ("Quantile" in str(nc_score)) or (base_model_type == True):
             self.nc_score = nc_score(
@@ -62,10 +60,16 @@ class LocartSplit(BaseEstimator):
 
     def fit(self, X, y, random_seed_tree=1250, **kwargs):
         """
-        Fit non conformity score to training samples
+        Fit base model embeded in the conformal score class to the training set.
+        If "weigthing" is True, we fit a Random Forest model to obtain variance estimations as done in Bostrom et.al.(2021).
         --------------------------------------------------------
-        X: Feature matrix
-        y: label for training samples
+
+        Input: (i)    X: Training feature matrix
+               (ii)   y: Training label array
+               (iii)  random_seed_tree: Random Forest random seed for variance estimation (if weighting parameter is True)
+               (iv)   **kwargs: Keyword arguments passed to fit the random forest used for variance estimation.
+
+        Output: None
         """
         self.nc_score.fit(X, y)
         if self.weighting == True:
@@ -94,16 +98,21 @@ class LocartSplit(BaseEstimator):
         **kwargs
     ):
         """
-        Calibrate non conformity score using LocartSplit
+        Calibrate conformity score using CART or Random Forest
         --------------------------------------------------------
-        X_calib: Feature matrix
-        y_calib: label for training samples
-        random_seed: int
-            Random seed for CART or RFCDE
-        prune_tree: boolean
-            Wether the tree should be pruned or not.
-        prune_seed: int
-            If prune_tree = True, random seed for data splitting to prune
+
+        Input: (i)    X_calib: Calibration feature matrix
+               (ii)   y_calib: Calibration label array
+               (iii)  random_seed: Random seed for CART or Random Forest fitted to the confomity scores.
+               (iv)   prune_tree: Boolean indicatin whether CART tree should be pruned or not.
+               (v)    prune_seed: Random seed set for data splitting in the prune step.
+               (vi)   cart_train_size: Proportion of calibration data used in partitioning.
+               (vii)  random_projections: Boolean indicating whether we should augment the feature space with random projections or random fourier features. Default is False.
+               (viii) m: Number of random projections to augment feature space. Default is 1000.
+               (ix)   h: Random projections scale. Default is 1.
+               (x)    **kwargs: Keyword arguments to be passed to CART or Random Forest.
+
+        Ouput: Vector of cutoffs.
         """
         res = self.nc_score.compute(X_calib, y_calib)
 
@@ -111,7 +120,7 @@ class LocartSplit(BaseEstimator):
             w = self.compute_difficulty(X_calib)
             X_calib = np.concatenate((X_calib, w.reshape(-1, 1)), axis=1)
 
-        # splitting calibration data into a training half and a validation half
+        # splitting calibration data into a partitioning set and a cutoff set
         if self.split_calib:
             (
                 X_calib_train,
@@ -240,17 +249,32 @@ class LocartSplit(BaseEstimator):
         return self.cutoffs
 
     def compute_difficulty(self, X):
+        """
+        Auxiliary function to compute difficulty for each sample.
+        --------------------------------------------------------
+        input: (i)    X: specified feature matrix
+
+        output: Vector of variance estimates for each sample.
+        """
         cart_pred = np.zeros((X.shape[0], len(self.dif_model.estimators_)))
         i = 0
         # computing the difficulty score for each X_score
         for cart in self.dif_model.estimators_:
             cart_pred[:, i] = cart.predict(X)
             i += 1
-        # computing variance for each line
+        # computing variance for each dataset row
         return cart_pred.var(1)
 
     # creating random forest cutoffs
     def create_rf_cutoffs(self, X, res):
+        """
+        Auxiliary function to compute loforest cutoffs.
+        --------------------------------------------------------
+        input: (i)    X: feature matrix
+               (ii)   res: conformal scores
+
+        output: Dictionary with each leaf's cutoff.
+        """
         # looping through every decision tree in random forest
         cutoffs_list = []
         # getting all leafs
@@ -270,6 +294,13 @@ class LocartSplit(BaseEstimator):
         return cutoffs_list
 
     def add_random_projections(self, X):
+        """
+        Auxiliary function to add random projections to feature space.
+        --------------------------------------------------------
+        input: (i)    X: specified feature matrix
+
+        output: Matrix of random projections.
+        """
         projections = (
             np.sqrt(2)
             * np.cos(
@@ -281,6 +312,16 @@ class LocartSplit(BaseEstimator):
         return np.concatenate((X, projections), axis=1)
 
     def prune_tree(self, X_train, X_valid, res_train, res_valid):
+        """
+        Auxiliary function to conduct decision tree post pruning.
+        --------------------------------------------------------
+        input: (i)    X_train: feature matrix used to fit decision trees for each cost complexity alpha values.
+               (ii)   X_valid: feature matrix used to validate each cost complexity path.
+               (iii)  res_train: conformal scores used to fit decision trees for each cost complexity alpha values.
+               (iv)   res_valid: conformal scores used to validate each cost complexity path
+
+        output: Optimal cost complexity path to perform pruning.
+        """
         prune_path = self.cart.cost_complexity_pruning_path(X_train, res_train)
         ccp_alphas = prune_path.ccp_alphas
         current_loss = float("inf")
@@ -301,6 +342,14 @@ class LocartSplit(BaseEstimator):
 
     # uniform binning methods
     def uniform_binning(self, X_calib, y_calib):
+        """
+        Optional method used to perform euclidean binning of the feature space. Does not work well in high-dimensional datasets.
+        --------------------------------------------------------
+        input: (i)    X_calib: calibration feature matrix
+               (ii)   y_calib: calibration label vector
+
+        output: Binning cutoffs.
+        """
         # obtaining the residuals
         res = self.nc_score.compute(X_calib, y_calib)
         # generating uniform binning of the feature space based on the locart size
@@ -334,6 +383,13 @@ class LocartSplit(BaseEstimator):
         return self.unif_cutoffs
 
     def uniform_apply(self, X):
+        """
+        Auxiliary function to retrieve the uniform cutoff index for new observations.
+        --------------------------------------------------------
+        input: (i)    X: feature matrix
+
+        output: Vector of indices.
+        """
         int_idx = np.zeros(X.shape[0])
         for i in range(X.shape[0]):
             int_idx[i] = (
@@ -342,6 +398,11 @@ class LocartSplit(BaseEstimator):
         return int_idx
 
     def plot_locart(self):
+        """
+        Plot decision tree feature space partition
+        --------------------------------------------------------
+        output: Decision tree plot object.
+        """
         if self.cart_type == "CART":
             plot_tree(self.cart, filled=True)
             plt.title("Decision Tree fitted to non-conformity score")
@@ -349,7 +410,14 @@ class LocartSplit(BaseEstimator):
 
     def predict(self, X, type_model="Tree"):
         """
-        Predict $1 - \alpha$ prediction region for each test sample using LocartSplit local cutoff points
+        Predict 1 - alpha prediction intervals for each test sample using locart/loforest local cutoffs.
+        Alternatively, this function can be used to obtain euclidean binning prediction intervals.
+        --------------------------------------------------------
+        input: (i)    X: test feature matrix
+               (ii)   type_model: String indicating the type of partitioning used to obtain local cutoffs. "Tree" sets the locart/loforest partitioning, while
+               "euclidean" sets the euclidean binning. Default is "Tree".
+
+        output: Prediction intervals for each test sample.
         """
         # identifying cutoff point
         if self.weighting:
