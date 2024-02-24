@@ -195,3 +195,5 @@ metric_figures.zip
 # fast experiments
 /fast_experiments
 fast_experiments.zip
+
+clover/unused_metrics.py

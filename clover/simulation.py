@@ -2,6 +2,8 @@ import numpy as np
 from scipy import stats
 from scipy.special import erfinv, beta, betainc
 
+# all simulations conducted in the paper in the same class
+
 
 class simulation:
     def __init__(
@@ -321,7 +323,14 @@ class simulation:
 
 class toy_simulation:
     def __init__(
-        self, coef=0.3, hetero_value=1, asym_value=0.6, alpha=1, beta=1, xlim= np.array([0, 1]), rate=1
+        self,
+        coef=0.3,
+        hetero_value=1,
+        asym_value=0.6,
+        alpha=1,
+        beta=1,
+        xlim=np.array([0, 1]),
+        rate=1,
     ):
         self.coef = coef
         self.hetero_value = hetero_value
@@ -333,17 +342,17 @@ class toy_simulation:
 
     def bimodal(self, n, random_seed=1250):
         np.random.seed(random_seed)
-        X = np.random.uniform(low= self.xlim[0], high=self.xlim[1], size=(n, 1))
+        X = np.random.uniform(low=self.xlim[0], high=self.xlim[1], size=(n, 1))
         # bernoulli for normal mixture
         bern = np.random.binomial(n=1, p=0.5, size=n)
         y = (X[:, 0] ** 2) + (
             (bern == 0)
             * np.random.normal(
-                -X[:, 0], np.sqrt((self.hetero_value ** 2) - (X[:, 0] ** 2)), size=n
+                -X[:, 0], np.sqrt((self.hetero_value**2) - (X[:, 0] ** 2)), size=n
             )
             + (bern == 1)
             * np.random.normal(
-                X[:, 0], np.sqrt((self.hetero_value ** 2) - (X[:, 0] ** 2)), size=n
+                X[:, 0], np.sqrt((self.hetero_value**2) - (X[:, 0] ** 2)), size=n
             )
         )
 
@@ -358,7 +367,7 @@ class toy_simulation:
 
             y_mat[i, :] = np.random.normal(
                 X_grid[i] ** 2 + ((bern == 0) * -X_grid[i]) + ((bern == 1) * X_grid[i]),
-                scale=np.sqrt(((self.hetero_value ** 2) - (X_grid[i] ** 2))),
+                scale=np.sqrt(((self.hetero_value**2) - (X_grid[i] ** 2))),
                 size=B,
             )
         return y_mat
@@ -368,7 +377,7 @@ class toy_simulation:
         for i in range(X_grid.shape[0]):
             sample = np.random.normal(
                 X_grid[i] ** 2,
-                scale=np.sqrt((0.5) * ((self.hetero_value ** 2) - (X_grid[i] ** 2))),
+                scale=np.sqrt((0.5) * ((self.hetero_value**2) - (X_grid[i] ** 2))),
                 size=B,
             )
             band[i, 1], band[i, 0] = (
@@ -385,13 +394,13 @@ class toy_simulation:
             0.5
             * np.random.laplace(
                 -X[:, 0],
-                np.sqrt(((self.hetero_value ** 2) - (X[:, 0] ** 2)) / 2),
+                np.sqrt(((self.hetero_value**2) - (X[:, 0] ** 2)) / 2),
                 size=n,
             )
             + 0.5
             * np.random.laplace(
                 X[:, 0],
-                np.sqrt(((self.hetero_value ** 2) - (X[:, 0] ** 2)) / 2),
+                np.sqrt(((self.hetero_value**2) - (X[:, 0] ** 2)) / 2),
                 size=n,
             )
         )
@@ -402,10 +411,10 @@ class toy_simulation:
     def bimodal_laplace_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
         for i in range(X_grid.shape[0]):
-            b_2 = ((self.hetero_value ** 2) - (X_grid[i] ** 2)) / 2
+            b_2 = ((self.hetero_value**2) - (X_grid[i] ** 2)) / 2
             y_mat[i, :] = np.random.laplace(
                 X_grid[i] ** 2,
-                scale=np.sqrt((0.5 * b_2) + (0.0625 * (b_2 ** 2))),
+                scale=np.sqrt((0.5 * b_2) + (0.0625 * (b_2**2))),
                 size=B,
             )
         return y_mat
@@ -413,10 +422,10 @@ class toy_simulation:
     def bimodal_laplace_oracle(self, X_grid, B=1000, sig=0.1):
         band = np.zeros((X_grid.shape[0], 2))
         for i in range(X_grid.shape[0]):
-            b_2 = ((self.hetero_value ** 2) - (X_grid[i] ** 2)) / 2
+            b_2 = ((self.hetero_value**2) - (X_grid[i] ** 2)) / 2
             sample = np.random.laplace(
                 X_grid[i] ** 2,
-                scale=np.sqrt((0.5 * b_2) + (0.0625 * b_2 ** 2)),
+                scale=np.sqrt((0.5 * b_2) + (0.0625 * b_2**2)),
                 size=B,
             )
             band[i, 1], band[i, 0] = (
@@ -449,10 +458,16 @@ class toy_simulation:
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= (self.xlim / 2):
-                y_mat[i, :] = np.random.laplace(X_grid[i] ** 2, scale=mad_norm, size=B,)
+                y_mat[i, :] = np.random.laplace(
+                    X_grid[i] ** 2,
+                    scale=mad_norm,
+                    size=B,
+                )
             else:
                 y_mat[i, :] = np.random.normal(
-                    X_grid[i] ** 2, scale=np.sqrt(self.hetero_value), size=B,
+                    X_grid[i] ** 2,
+                    scale=np.sqrt(self.hetero_value),
+                    size=B,
                 )
         return y_mat
 
@@ -462,10 +477,16 @@ class toy_simulation:
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= self.xlim / 2:
-                sample = np.random.laplace(X_grid[i] ** 2, scale=mad_norm, size=B,)
+                sample = np.random.laplace(
+                    X_grid[i] ** 2,
+                    scale=mad_norm,
+                    size=B,
+                )
             else:
                 sample = np.random.normal(
-                    X_grid[i] ** 2, scale=np.sqrt(self.hetero_value), size=B,
+                    X_grid[i] ** 2,
+                    scale=np.sqrt(self.hetero_value),
+                    size=B,
                 )
             band[i, 1], band[i, 0] = (
                 np.quantile(sample, (1 - (sig / 2))),
@@ -544,7 +565,11 @@ class toy_simulation:
                 y_mat[i, :] = np.random.laplace(X_grid[i] ** 2, scale=mad_beta, size=B)
             else:
                 y_mat[i, :] = X_grid[i] ** 2 + (
-                    np.random.beta(self.alpha, self.beta, size=B,)
+                    np.random.beta(
+                        self.alpha,
+                        self.beta,
+                        size=B,
+                    )
                     - (self.alpha / (self.alpha + self.beta))
                 )
         return y_mat
@@ -577,7 +602,11 @@ class toy_simulation:
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= self.xlim / 2:
-                sample = np.random.laplace(X_grid[i] ** 2, scale=mad_beta, size=B,)
+                sample = np.random.laplace(
+                    X_grid[i] ** 2,
+                    scale=mad_beta,
+                    size=B,
+                )
             else:
                 sample = X_grid[i] ** 2 + (
                     np.random.beta(self.alpha, self.beta, size=B)
@@ -624,7 +653,11 @@ class toy_simulation:
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= self.xlim / 2:
-                sample = np.random.laplace(X_grid[i] ** 2, scale=mad_beta, size=B,)
+                sample = np.random.laplace(
+                    X_grid[i] ** 2,
+                    scale=mad_beta,
+                    size=B,
+                )
             else:
                 sample = X_grid[i] ** 2 + (
                     np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
@@ -671,7 +704,11 @@ class toy_simulation:
 
         for i in range(X_grid.shape[0]):
             if X_grid[i] <= self.xlim / 2:
-                sample = np.random.laplace(X_grid[i] ** 2, scale=mad_log, size=B,)
+                sample = np.random.laplace(
+                    X_grid[i] ** 2,
+                    scale=mad_log,
+                    size=B,
+                )
             else:
                 sample = X_grid[i] ** 2 + (
                     np.random.logistic(0, self.hetero_value, size=B)

@@ -17,8 +17,6 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import QuantileRegressor
 from sklearn.model_selection import train_test_split
 
-from .coverage_evaluator import Coverage_evaluator
-
 
 # creating paralelized function outside of class
 def _retrain_loop_par(coverage_evaluator, model, alpha, X_train, w_train, X_test, seed):
@@ -142,7 +140,10 @@ class Valid_pred_sets(BaseEstimator):
                     w_train_prune,
                     w_test_prune,
                 ) = train_test_split(
-                    self.X_train, self.w_train, test_size=0.5, random_state=prune_seed,
+                    self.X_train,
+                    self.w_train,
+                    test_size=0.5,
+                    random_state=prune_seed,
                 )
                 optim_ccp = self.prune_tree(
                     X_train_prune, X_test_prune, w_train_prune, w_test_prune
@@ -167,11 +168,6 @@ class Valid_pred_sets(BaseEstimator):
                 LogisticGAM()
                 .gridsearch(self.X_train, self.w_train)
                 .fit(self.X_train, self.w_train)
-            )
-        elif self.coverage_evaluator == "nnet":
-            # using pytorch coverage_evaluator class
-            self.model = Coverage_evaluator(seed=random_seed, **kwargs).fit(
-                self.X_train, self.w_train
             )
         else:
             self.model = self.coverage_evaluator.set_params(**kwargs).fit(
