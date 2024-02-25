@@ -19,11 +19,27 @@ def real_coverage(model_preds, y_mat):
 
 # general interval length
 def compute_interval_length(predictions):
+    """
+    Function to compute interval length for prediction intervals
+    ----------------------------------------------------------------
+    Input: (i)    predictions: Prediction interval vector.
+
+    Output: Interval length vector.
+    """
     return predictions[:, 1] - predictions[:, 0]
 
 
 # implementing the standard interval score
 def smis(predictions, y_test, alpha):
+    """
+    Function to standard interval score for prediction intervals at a miscalibration level alpha.
+    ----------------------------------------------------------------
+    Input: (i)    predictions: Prediction interval vector.
+           (ii)   y_test: Testing label vector.
+           (iii)  alpha: Miscalibration level used to build Prediction Intervals.
+
+    Output: Smis score.
+    """
     int_length = compute_interval_length(predictions)
     is_alpha = -(
         int_length
