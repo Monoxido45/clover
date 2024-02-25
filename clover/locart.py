@@ -17,7 +17,7 @@ from clover.scores import LocalRegressionScore, RegressionScore, QuantileScore
 
 class LocartSplit(BaseEstimator):
     """
-    Local Regression Tree or Local Forests
+    Local Regression Tree and Local Forests class
     ----------------------------------------------------------------
     """
 
@@ -64,9 +64,9 @@ class LocartSplit(BaseEstimator):
         If "weigthing" is True, we fit a Random Forest model to obtain variance estimations as done in Bostrom et.al.(2021).
         --------------------------------------------------------
 
-        Input: (i)    X: Training feature matrix
+        Input: (i)    X: Training numpy feature matrix
                (ii)   y: Training label array
-               (iii)  random_seed_tree: Random Forest random seed for variance estimation (if weighting parameter is True)
+               (iii)  random_seed_tree: Random Forest random seed for variance estimation (if weighting parameter is True).
                (iv)   **kwargs: Keyword arguments passed to fit the random forest used for variance estimation.
 
         Output: LocartSplit object
@@ -101,7 +101,7 @@ class LocartSplit(BaseEstimator):
         Calibrate conformity score using CART or Random Forest
         --------------------------------------------------------
 
-        Input: (i)    X_calib: Calibration feature matrix
+        Input: (i)    X_calib: Calibration numpy feature matrix
                (ii)   y_calib: Calibration label array
                (iii)  random_seed: Random seed for CART or Random Forest fitted to the confomity scores.
                (iv)   prune_tree: Boolean indicating whether CART tree should be pruned or not.
@@ -253,7 +253,7 @@ class LocartSplit(BaseEstimator):
         """
         Auxiliary function to compute difficulty for each sample.
         --------------------------------------------------------
-        input: (i)    X: specified feature matrix
+        input: (i)    X: specified numpy feature matrix
 
         output: Vector of variance estimates for each sample.
         """
@@ -271,7 +271,7 @@ class LocartSplit(BaseEstimator):
         """
         Auxiliary function to compute loforest cutoffs.
         --------------------------------------------------------
-        input: (i)    X: feature matrix
+        input: (i)    X: numpy feature matrix
                (ii)   res: conformal scores
 
         output: Dictionary with each leaf's cutoff.
@@ -298,7 +298,7 @@ class LocartSplit(BaseEstimator):
         """
         Auxiliary function to add random projections to feature space.
         --------------------------------------------------------
-        input: (i)    X: specified feature matrix
+        input: (i)    X: specified numpy feature matrix
 
         output: Matrix of random projections.
         """
@@ -316,8 +316,8 @@ class LocartSplit(BaseEstimator):
         """
         Auxiliary function to conduct decision tree post pruning.
         --------------------------------------------------------
-        Input: (i)    X_train: feature matrix used to fit decision trees for each cost complexity alpha values.
-               (ii)   X_valid: feature matrix used to validate each cost complexity path.
+        Input: (i)    X_train: numpy feature matrix used to fit decision trees for each cost complexity alpha values.
+               (ii)   X_valid: numpy feature matrix used to validate each cost complexity path.
                (iii)  res_train: conformal scores used to fit decision trees for each cost complexity alpha values.
                (iv)   res_valid: conformal scores used to validate each cost complexity path.
 
@@ -346,7 +346,7 @@ class LocartSplit(BaseEstimator):
         """
         Optional method used to perform euclidean binning of the feature space. Does not work well in high-dimensional datasets.
         --------------------------------------------------------
-        input: (i)    X_calib: calibration feature matrix
+        input: (i)    X_calib: calibration numpy feature matrix
                (ii)   y_calib: calibration label vector
 
         output: Binning cutoffs.
@@ -387,7 +387,7 @@ class LocartSplit(BaseEstimator):
         """
         Auxiliary function to retrieve the uniform cutoff index for new observations.
         --------------------------------------------------------
-        Input: (i)    X: feature matrix
+        Input: (i)    X: numpy feature matrix
 
         Output: Vector of indices.
         """
@@ -414,7 +414,7 @@ class LocartSplit(BaseEstimator):
         Predict 1 - alpha prediction intervals for each test sample using locart/loforest local cutoffs.
         Alternatively, this function can be used to obtain euclidean binning prediction intervals.
         --------------------------------------------------------
-        Input: (i)    X: test feature matrix
+        Input: (i)    X: test numpy feature matrix
                (ii)   type_model: String indicating the type of partitioning used to obtain local cutoffs. "Tree" sets the locart/loforest partitioning, while
                "euclidean" sets the euclidean binning. Default is "Tree".
 
@@ -461,56 +461,150 @@ class LocartSplit(BaseEstimator):
 
 
 class QuantileSplit(BaseEstimator):
+    """
+    Conformalized Quantile Regression class
+    ----------------------------------------------------------------
+    """
+
     def __init__(self, base_model, alpha, is_fitted=False, **kwargs):
+        """
+        Input: (i)    base_model: Quantile regression model with fit and predict methods defined
+               (ii)   alpha: Miscalibration level
+               (iii)  is_fitted: Boolean informing whether the base model is already fitted.
+               (iv)   **kwargs: Additional keyword arguments to be passed to the base model.
+        """
         self.nc_score = QuantileScore(
             base_model, is_fitted=is_fitted, alpha=alpha, **kwargs
         )
         self.alpha = alpha
 
     def fit(self, X_train, y_train):
+        """
+        Fit base model embedded on quantile conformal score to the training set.
+        ----------------------------------------------------------------
+
+        Input: (i)    X_train: Training numpy feature matrix.
+               (ii)   y_train: Training labels.
+
+        Output: QuantileSplit object.
+        """
         self.nc_score.fit(X_train, y_train)
         return self
 
     def calibrate(self, X_calib, y_calib):
+        """
+        Calibrate quantile conformity score
+        ----------------------------------------------------------------
+
+        Input: (i)    X_calib: Calibration numpy feature matrix.
+               (ii)   y_calib: Calibration labels.
+
+        Output: None
+        """
         res = self.nc_score.compute(X_calib, y_calib)
         n = X_calib.shape[0]
         self.cutoff = np.quantile(res, q=np.ceil((n + 1) * (1 - self.alpha)) / n)
         return None
 
     def predict(self, X_test):
+        """
+        Predict 1 - alpha prediction intervals for each test samples using CQR cutoff
+        ----------------------------------------------------------------
+
+        Input: (i)    X_test: Test numpy feature matrix.
+
+        Output: Prediction intervals for each test sample.
+        """
         return self.nc_score.predict(X_test, self.cutoff)
 
 
 # Local regression split proposed by Lei et al
 class LocalRegressionSplit(BaseEstimator):
+    """
+    Local Regression Split class
+    ----------------------------------------------------------------
+    """
+
     def __init__(self, base_model, alpha, is_fitted=False, **kwargs):
+        """
+        Input: (i)    base_model: Regression base model with fit and predict methods defined.
+               (ii)   alpha: Miscalibration level.
+               (iii)  is_fitted: Boolean informing whether the base model is already fitted.
+               (iv)   **kwargs: Additional keyword arguments to be passed to the base model.
+        """
         self.nc_score = LocalRegressionScore(base_model, is_fitted=is_fitted, **kwargs)
         self.alpha = alpha
 
     def fit(self, X_train, y_train):
+        """
+        Fit base model embedded on local regression conformal score to the training set.
+        ----------------------------------------------------------------
+
+        Input: (i)    X_train: Training numpy feature matrix.
+               (ii)   y_train: Training labels.
+
+        Output: QuantileSplit object.
+        """
         # fitting the base model
         self.nc_score.fit(X_train, y_train)
         return self
 
     def calibrate(self, X_calib, y_calib):
+        """
+        Calibrate local regression score
+        ----------------------------------------------------------------
+
+        Input: (i)    X_calib: Calibration numpy feature matrix.
+               (ii)   y_calib: Calibration labels.
+
+        Output: None
+        """
         res = self.nc_score.compute(X_calib, y_calib)
         n = X_calib.shape[0]
         self.cutoff = np.quantile(res, q=np.ceil((n + 1) * (1 - self.alpha)) / n)
         return None
 
     def predict(self, X_test):
+        """
+        Predict 1 - alpha prediction intervals for each test samples using local regression split cutoff
+        ----------------------------------------------------------------
+
+        Input: (i)    X_test: Test numpy feature matrix.
+
+        Output: Prediction intervals for each test sample.
+        """
         return self.nc_score.predict(X_test, self.cutoff)
 
 
 # Mondrian split method proposed by Bostrom et al
 class MondrianRegressionSplit(BaseEstimator):
+    """
+    Mondrian regression split class
+    ----------------------------------------------------------------
+    """
+
     def __init__(self, base_model, alpha, is_fitted=False, k=10, **kwargs):
+        """
+        Input: (i)    base_model: Regression base model with fit and predict methods defined.
+               (ii)   alpha: Miscalibration level.
+               (iii)  is_fitted: Boolean informing whether the base model is already fitted.
+               (iv)   k: Number of bins for splitting the conditional variance (diffulty).
+               (v)    **kwargs: Additional keyword arguments to be passed to the base model.
+        """
         self.base_model = base_model
         self.k = k
         self.nc_score = RegressionScore(self.base_model, is_fitted=is_fitted, **kwargs)
         self.alpha = alpha
 
     def fit(self, X_train, y_train, random_seed_tree=550, **kwargs):
+        """
+        Fit both base model embedded on the regression score to the training set and a Random Forest model to estimate variance in the calibration step.
+        ----------------------------------------------------------------
+        Input: (i)    X_train: Training numpy feature matrix.
+               (ii)   y_train: Train numpy labels.
+               (iii)  random_seed_tree: Random Forest random seed for variance estimation.
+               (iv)   **kwargs: Additional keyword arguments to be passed to the Random Forest model.
+        """
         # fitting the base model
         self.nc_score.fit(X_train, y_train)
         # training RandomForestRegressor for difficulty estimation if base model is not RandomForest
@@ -525,11 +619,25 @@ class MondrianRegressionSplit(BaseEstimator):
 
         return self
 
-    def calibrate(self, X_calib, y_calib, split=False, random_state=1250):
+    def calibrate(
+        self, X_calib, y_calib, split=False, binning_size=0.5, random_state=1250
+    ):
+        """
+        Calibrate conformity scores using mondrian binning.
+        ----------------------------------------------------------------
+
+        Input: (i)    X_calib: Calibration numpy feature matrix.
+               (ii)   y_calib: Calibration labels.
+               (iii)  split: Whether to split the dataset into a binning set and a cutoff set in the binning step. Default is False.
+               (iv)   binning_size: Proportion of the splitted dataset destined for binning if split is True. Default is 0.5.
+               (v)    random_state: Random seed for splitting the dataset if split is True.
+
+        Output: None
+        """
         if split:
             # making the split
             X_score, X_final, y_score, y_final = train_test_split(
-                X_calib, y_calib, test_size=0.5, random_state=random_state
+                X_calib, y_calib, test_size=1 - binning_size, random_state=random_state
             )
         else:
             X_score, X_final, y_score, y_final = X_calib, X_calib, y_calib, y_calib
@@ -561,6 +669,14 @@ class MondrianRegressionSplit(BaseEstimator):
         return None
 
     def compute_difficulty(self, X):
+        """
+        Auxiliary function to estimate difficulty (variance) for a given sample.
+        ----------------------------------------------------------------
+
+        Input: (i)    X: Calibration numpy feature matrix.
+
+        Output: Difficulty estimates for each sample.
+        """
         cart_pred = np.zeros((X.shape[0], len(self.dif_model.estimators_)))
         i = 0
         # computing the difficulty score for each X_score
@@ -570,11 +686,19 @@ class MondrianRegressionSplit(BaseEstimator):
         # computing variance for each line
         return cart_pred.var(1)
 
-    def apply(self, mad):
-        int_idx = np.zeros(mad.shape[0])
-        for i in range(mad.shape[0]):
-            index = np.where(mad[i] <= self.mondrian_quantiles)[0]
-            # first testing if mad is in any interval before the last quantile
+    def apply(self, dif):
+        """
+        Auxiliary function to obtain bin index for each difficulty estimate.
+        ----------------------------------------------------------------
+
+        Input: (i)    dif: Difficulty estimate vector.
+
+        Output: Vector of indices.
+        """
+        int_idx = np.zeros(dif.shape[0])
+        for i in range(dif.shape[0]):
+            index = np.where(dif[i] <= self.mondrian_quantiles)[0]
+            # first testing if dif is in any interval before the last quantile
             if index.shape[0] >= 1:
                 int_idx[i] = index[0]
             else:
@@ -582,6 +706,14 @@ class MondrianRegressionSplit(BaseEstimator):
         return int_idx
 
     def predict(self, X_test):
+        """
+        Predict 1 - alpha prediction intervals for each test samples using mondrian cutoffs.
+        ----------------------------------------------------------------
+
+        Input: (i)    X_test: Test numpy feature matrix.
+
+        Output: Prediction intervals for each test sample.
+        """
         # prediciting difficulty
         pred_dif = self.compute_difficulty(X_test)
 
