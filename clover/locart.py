@@ -17,7 +17,12 @@ from clover.scores import LocalRegressionScore, RegressionScore, QuantileScore
 
 class LocartSplit(BaseEstimator):
     """
-    Local Regression Tree and Local Forests class
+    Local Regression Tree and Local Forests class.
+    Fit LOCART and LOFOREST local calibration methods for any conformity score and base model of interest. The specification of the conformity score
+    can be made through the usage of the basic class "Scores". Through the "split_calib" parameter we can decide whether to use all calibration set to
+    obtain both the partition and cutoffs or split it into two sets, one specific for partitioning and other for obtaining the local cutoffs. Also, if
+    desired, we can fit the augmented version of both our methods (A-LOCART and A-LOFOREST) by the "weighting" parameter, which if True, adds difficulty
+    estimates to our feature matrix in the calibration and prediction step.
     ----------------------------------------------------------------
     """
 
@@ -40,8 +45,8 @@ class LocartSplit(BaseEstimator):
                (iv)   base_model_type: Boolean indicating whether the base model ouputs quantiles or not. Default is False.
                (v)    cart_type: Set "CART" to obtain LOCART prediction intervals and "RF" to obtain LOFOREST prediction intervals. Default is CART.
                (vi)   split_calib: Boolean designating if we should split the calibration set into partitioning and cutoff set. Default is True.
-               (vii)  **kwargs: keyword arguments passed to fit base_model.
-               (viii) weighting: Set whether we should augment the feature space with conditional variance estimates. Defatul is False.
+               (vii)  **kwargs: Additional keyword arguments passed to fit base_model.
+               (viii) weighting: Set whether we should augment the feature space with conditional variance (difficulty) estimates. Default is False.
         """
         self.base_model_type = base_model_type
         if ("Quantile" in str(nc_score)) or (base_model_type == True):
@@ -99,6 +104,9 @@ class LocartSplit(BaseEstimator):
     ):
         """
         Calibrate conformity score using CART or Random Forest
+        As default, we fix "min_samples_leaf" as 100 for both the CART and RF algorithms,meaning that each partition element will have at least
+        100 samples each, and use the sklearn default for the remaining parameters. To generate other partitioning schemes, all RF and CART parameters
+        can be changed through keyword arguments, but we recommend changing only the "min_samples_leaf" argument if needed.
         --------------------------------------------------------
 
         Input: (i)    X_calib: Calibration numpy feature matrix
@@ -168,7 +176,7 @@ class LocartSplit(BaseEstimator):
         if self.cart_type == "CART":
             # declaring decision tree
             self.cart = DecisionTreeRegressor(
-                random_state=random_seed, min_samples_leaf=300
+                random_state=random_seed, min_samples_leaf=100
             ).set_params(**kwargs)
             # obtaining optimum alpha to prune decision tree
             if prune_tree:

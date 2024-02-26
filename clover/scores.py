@@ -6,6 +6,12 @@ from sklearn.base import clone
 
 # defining score basic class
 class Scores(ABC):
+    """
+    Base class to build any conformity score of choosing.
+    In this class, one can define any conformity score for any base model of interest, already fitted or not.
+    ----------------------------------------------------------------
+    """
+
     def __init__(self, base_model, is_fitted, **kwargs):
         self.is_fitted = is_fitted
         if self.is_fitted:
@@ -15,14 +21,38 @@ class Scores(ABC):
 
     @abstractmethod
     def fit(self, X, y):
+        """
+        Fit the base model to training data
+        --------------------------------------------------------
+        Input: (i)    X: Training feature matrix.
+               (ii)   y: Training label vector.
+
+        Output: Scores object
+        """
         pass
 
     @abstractmethod
     def compute(self, X_calib, y_calib):
+        """
+        Compute the conformity score in the calibration set
+        --------------------------------------------------------
+        Input: (i)    X_calib: Calibration feature matrix
+               (ii)   y_calib: Calibration label vector
+
+        Output: Conformity score vector
+        """
         pass
 
     @abstractmethod
     def predict(self, X_test, cutoff):
+        """
+        Compute prediction intervals specified cutoff(s).
+        --------------------------------------------------------
+        Input: (i)    X_test: Test feature matrix
+               (ii)   cutoff: Cutoff vector
+
+        Output: Prediction intervals for test sample.
+        """
         pass
 
 
@@ -54,7 +84,7 @@ class RegressionScore(Scores):
 
     def compute(self, X_calib, y_calib):
         """
-        Compute the conformity score in the calibration set
+        Compute the regression conformity score in the calibration set
         --------------------------------------------------------
         Input: (i)    X_calib: Calibration feature matrix
                (ii)   y_calib: Calibration label vector
