@@ -38,7 +38,7 @@ class LocartSplit(BaseEstimator):
                (ii)   base_model: Base model with fit and predict methods to be embedded in the conformity score class.
                (iii)  alpha: Float between 0 and 1 specifying the miscoverage level of resulting prediction region.
                (iv)   base_model_type: Boolean indicating whether the base model ouputs quantiles or not. Default is False.
-               (v)    forest: Set whether we should fit random forest instead of CART to the conformal score. Default is False
+               (v)    cart_type: Set "CART" to obtain LOCART prediction intervals and "RF" to obtain LOFOREST prediction intervals. Default is CART.
                (vi)   split_calib: Boolean designating if we should split the calibration set into partitioning and cutoff set. Default is True.
                (vii)  **kwargs: keyword arguments passed to fit base_model.
                (viii) weighting: Set whether we should augment the feature space with conditional variance estimates. Defatul is False.
