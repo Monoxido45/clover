@@ -39,7 +39,7 @@ class LocartSplit(BaseEstimator):
         **kwargs
     ):
         """
-        Input: (i)    nc_score: Conformity score of choosing. It can be specified by choosing a conformal score class based on the Scores basic class.
+        Input: (i)    nc_score: Conformity score of choosing. It can be specified by instantiating a conformal score class based on the Scores basic class.
                (ii)   base_model: Base model with fit and predict methods to be embedded in the conformity score class.
                (iii)  alpha: Float between 0 and 1 specifying the miscoverage level of resulting prediction region.
                (iv)   base_model_type: Boolean indicating whether the base model ouputs quantiles or not. Default is False.
@@ -466,6 +466,32 @@ class LocartSplit(BaseEstimator):
             pred = self.nc_score.predict(X, cutoffs)
 
         return pred
+
+
+class RegressionSplit(BaseEstimator):
+    """
+    Basic Regression Split class
+    ----------------------------------------------------------------
+    """
+
+    def __init__(self, base_model, alpha, is_fitted=False, **kwargs) -> None:
+        super().__init__()
+        self.nc_score = RegressionScore(
+            base_model, is_fitted=is_fitted, alpha=alpha, **kwargs
+        )
+        self.alpha = alpha
+
+    def fit(self, X_train, y_train):
+        self.nc_score.fit(X_train, y_train)
+
+    def calibrate(self, X_calib, y_calib):
+        res = self.nc_score.compute(X_calib, y_calib)
+        n = X_calib.shape[0]
+        self.cutoff = np.quantile(res, q=np.ceil((n + 1) * (1 - self.alpha)) / n)
+        return None
+
+    def predict(self, X_test):
+        return self.nc_score.predict(X_test, self.cutoff)
 
 
 class QuantileSplit(BaseEstimator):
