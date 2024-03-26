@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 import numpy as np
-from sklearn.base import clone
+from copy import deepcopy
 
 
 # defining score basic class
@@ -135,7 +135,7 @@ class LocalRegressionScore(Scores):
             self.base_model.fit(X, y)
 
         res_model = np.abs(y - self.base_model.predict(X))
-        self.mad_model = clone(self.base_model).fit(X, res_model)
+        self.mad_model = deepcopy(self.base_model).fit(X, res_model)
         return self
 
     def compute(self, X_calib, y_calib):

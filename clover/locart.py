@@ -406,7 +406,7 @@ class LocartSplit(BaseEstimator):
             )
         return int_idx
 
-    def plot_locart(self):
+    def plot_locart(self, title=None):
         """
         Plot decision tree feature space partition
         --------------------------------------------------------
@@ -414,7 +414,10 @@ class LocartSplit(BaseEstimator):
         """
         if self.cart_type == "CART":
             plot_tree(self.cart, filled=True)
-            plt.title("Decision Tree fitted to non-conformity score")
+            if title == None:
+                plt.title("Decision Tree fitted to non-conformity score")
+            else:
+                plt.title(title)
             plt.show()
 
     def predict(self, X, type_model="Tree"):
