@@ -16,6 +16,6 @@ setup(
     packages=["clover"],
     license="MIT",
     keywords=["prediction intervals", "conformal prediction", "local calibration"],
-    install_requires=["numpy", "scikit-learn", "scipy", "matplotlib"],
+    install_requires=["numpy", "scikit-learn", "scipy", "matplotlib", "nltk", "tqdm"],
     zip_safe=False,
 )
