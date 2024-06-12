@@ -1,8 +1,14 @@
 import argparse
 import zipfile
+import re
 
+import nltk
 import numpy as np
 import pandas as pd
+from nltk.corpus import stopwords
+from nltk.stem import SnowballStemmer
+from tqdm import tqdm
+
 
 from utils import get_folder
 
@@ -68,9 +74,7 @@ def process(dataset, n_samples=None, seed=0):
 
     # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadSuperconductorData.m
     if dataset == "superconductivity":
-        with zipfile.ZipFile(
-            f"data/raw/superconductivity/superconduct.zip", "r"
-        ) as file:
+        with zipfile.ZipFile(f"data/raw/superconductivity/superconduct.zip", "r") as file:
             df = pd.read_csv(file.open("train.csv"))
 
         # First column are urls.
@@ -432,6 +436,52 @@ def process(dataset, n_samples=None, seed=0):
         X = df.loc[:, data_names].values
         y = grade.values
         data = pd.DataFrame(X)
+        data["target"] = y
+
+    if dataset == "amazon":
+        nltk.download("stopwords")
+
+        data = pd.read_csv(f"data/raw/{dataset}/Reviews.csv")
+
+        # Drop duplicates where needed.
+        data_drop_duplicates = data.drop_duplicates(
+            subset={"UserId", "ProfileName", "Time", "Text"}
+        )
+
+        # Validate entries based on definition of numerator and denominator
+        # features.
+        final = data_drop_duplicates[
+            data_drop_duplicates["HelpfulnessNumerator"]
+            <= data_drop_duplicates["HelpfulnessDenominator"]
+        ]
+
+        if n_samples:
+            final = final.sample(n=n_samples, random_state=seed)
+
+        X_text = final["Text"]
+        y = final["Score"].to_numpy()
+
+        sent = []
+        snow = SnowballStemmer("english")
+        for i in tqdm(range(len(X_text))):
+            sentence = X_text.iloc[i]
+            sentence = sentence.lower()  # Converting to lowercase
+            cleaner = re.compile("<.*?>")  # Define the pattern for HTML tags.
+            sentence = re.sub(cleaner, " ", sentence)  # Removing HTML tags
+            sentence = re.sub(r'[?|!|\'|"|#]', r"", sentence)  # Removing marks.
+            sentence = re.sub(r"[.|,|)|(|\|/]", r" ", sentence)  # Removing punctuations
+
+            sequ = " ".join(
+                [
+                    snow.stem(word)
+                    for word in sentence.split()
+                    if word not in stopwords.words("english")
+                ]
+            )
+            sent.append(sequ)
+
+        X_text = np.array(sent)
+        data = pd.DataFrame(X_text)
         data["target"] = y
 
     return data

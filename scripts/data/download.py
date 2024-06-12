@@ -20,6 +20,7 @@ URL = {
     "cycle": "http://archive.ics.uci.edu/ml/machine-learning-databases/00294/",
     "winered": "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/",
     "winewhite": "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/",
+    "amazon": "https://www.kaggle.com/datasets/snap/amazon-fine-food-reviews",
 }
 FILES = {
     "blog": ["BlogFeedback.zip"],
@@ -33,6 +34,7 @@ FILES = {
     "cycle": ["CCPP.zip"],
     "winered": ["winequality-red.csv", "winequality.names"],
     "winewhite": ["winequality-white.csv", "winequality.names"],
+    "amazon": [""],
 }
 
 output_folder = get_folder(f"data/raw/{DATASET}")
@@ -40,6 +42,9 @@ output_folder = get_folder(f"data/raw/{DATASET}")
 for file in FILES[DATASET]:
     file_url = f"{URL[DATASET]}/{file}"
     file_path = f"{output_folder}/{file}"
+
+    if file == "":
+        raise ValueError("Cannot be downloaded. Check repo for specific instructions.")
 
     try:
         download_from_url(file_url, file_path)
