@@ -1,10 +1,28 @@
 import numpy as np
 from scipy import stats
 from scipy.special import erfinv, beta, betainc
+from sklearn.utils import check_random_state
+
+
+def make_correlated_design(n_samples, n_features, rho=0.5, random_state=None):
+    rng = check_random_state(random_state)
+
+    if rho != 0:
+        sigma = np.sqrt(1 - rho * rho)
+        U = rng.randn(n_samples)
+
+        X = np.empty([n_samples, n_features], order="F")
+        X[:, 0] = U
+        for j in range(1, n_features):
+            U *= rho
+            U += sigma * rng.randn(n_samples)
+            X[:, j] = U
+    else:
+        X = rng.randn(n_samples, n_features)
+    return X
+
 
 # all simulations conducted in the paper in the same class
-
-
 class simulation:
     def __init__(
         self,
@@ -15,6 +33,7 @@ class simulation:
         hetero_value=1,
         asym_value=0.6,
         t_degree=4,
+        rho=0.7,
     ):
         self.dim = dim
         self.coef = coef
@@ -23,6 +42,7 @@ class simulation:
         self.hetero_value = hetero_value
         self.asym_value = asym_value
         self.t_degree = t_degree
+        self.rho = rho
 
     def change_dim(self, new_dim):
         self.dim = new_dim
@@ -41,6 +61,20 @@ class simulation:
             )
         self.X, self.y = X, y
         self.kind = "homoscedastic"
+
+    def correlated_homoscedastic(self, n, random_seed=1250):
+        X = make_correlated_design(n, self.dim, self.rho, random_seed)
+        if self.noise:
+            y = np.random.normal(self.coef * X[:, 0], scale=1, size=n)
+        else:
+            y = np.random.normal(
+                self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1),
+                scale=1,
+                size=n,
+            )
+
+        self.X, self.y = X, y
+        self.kind = "correlated_homoscedastic"
 
     def t_residuals(self, n, random_seed=1250):
         np.random.seed(random_seed)
@@ -226,8 +260,7 @@ class simulation:
                     self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]),
                     scale=np.sqrt(
                         self.hetero_value
-                        + self.coef
-                        * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
+                        + self.coef * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
                     ),
                     size=B,
                 )
@@ -266,8 +299,7 @@ class simulation:
                     1,
                     scale=np.sqrt(
                         self.hetero_value
-                        + self.coef
-                        * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
+                        + self.coef * np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]))
                     ),
                     size=B,
                 )
@@ -502,9 +534,7 @@ class toy_simulation:
                 2
                 * self.alpha
                 * (
-                    betainc(
-                        self.alpha, self.beta, self.alpha / (self.beta + self.alpha)
-                    )
+                    betainc(self.alpha, self.beta, self.alpha / (self.beta + self.alpha))
                     * beta(self.alpha, self.beta)
                 )
             )
@@ -542,9 +572,7 @@ class toy_simulation:
                 2
                 * self.alpha
                 * (
-                    betainc(
-                        self.alpha, self.beta, self.alpha / (self.beta + self.alpha)
-                    )
+                    betainc(self.alpha, self.beta, self.alpha / (self.beta + self.alpha))
                     * beta(self.alpha, self.beta)
                 )
             )
@@ -580,9 +608,7 @@ class toy_simulation:
                 2
                 * self.alpha
                 * (
-                    betainc(
-                        self.alpha, self.beta, self.alpha / (self.beta + self.alpha)
-                    )
+                    betainc(self.alpha, self.beta, self.alpha / (self.beta + self.alpha))
                     * beta(self.alpha, self.beta)
                 )
             )
