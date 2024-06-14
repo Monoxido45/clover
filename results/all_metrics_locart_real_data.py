@@ -7,6 +7,9 @@ from os import path
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
 
+# text vectorizer for amazon dataset
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 # conformal methods
 from nonconformist.cp import IcpRegressor
 from nonconformist.nc import NcFactory
@@ -25,13 +28,7 @@ from acpi import ACPI
 
 # performance measures
 import time
-from clover.utils import (
-    compute_interval_length,
-    split,
-    smis,
-    pearson_correlation,
-    HSIC_correlation,
-)
+from clover.utils import compute_interval_length, split, smis
 from clover.valid_pred_sets import Valid_pred_sets
 import gc
 
@@ -67,7 +64,7 @@ def compute_metrics(
     max_leaf_nodes=None,
     min_samples_leaf=150,
     prune=True,
-    **kwargs
+    **kwargs,
 ):
     # starting experiment
     print("Starting experiments for {} data".format(data_name))
@@ -89,13 +86,11 @@ def compute_metrics(
     print("Number of samples used for testing: {}".format(test_size * X.shape[0]))
 
     # managing directories
-    folder_path = "/results/pickle_files/real_data_experiments/{}_data".format(
-        data_name
-    )
+    folder_path = "/results/pickle_files/real_data_experiments/{}_data".format(data_name)
 
     # creating directories to each file
-    if not (path.exists(original_path + folder_path)):
-        os.mkdir(original_path + folder_path)
+    if not os.path.isdir(original_path + folder_path):
+        os.makedirs(original_path + folder_path)
 
     # generating two random seeds vector
     np.random.seed(random_seed)
@@ -117,9 +112,9 @@ def compute_metrics(
             mean_valid_pred_set, max_valid_pred_set = np.zeros((n_it, 9)), np.zeros(
                 (n_it, 9)
             )
-            mean_int_length_vector, mean_coverage_vector = np.zeros(
+            mean_int_length_vector, mean_coverage_vector = np.zeros((n_it, 9)), np.zeros(
                 (n_it, 9)
-            ), np.zeros((n_it, 9))
+            )
             mean_int_length_cover_vector = np.zeros((n_it, 9))
 
             # running times
@@ -134,9 +129,7 @@ def compute_metrics(
                 "mean_interval_length_{}_data.npy".format(data_name)
             )
 
-            mean_coverage_vector = np.load(
-                "mean_coverage_{}_data.npy".format(data_name)
-            )
+            mean_coverage_vector = np.load("mean_coverage_{}_data.npy".format(data_name))
 
             mean_valid_pred_set, max_valid_pred_set = (
                 np.load("mean_valid_pred_set_{}_data.npy".format(data_name)),
@@ -173,6 +166,24 @@ def compute_metrics(
                 calibrate=True,
                 random_seed=seed,
             )
+
+            # vectorize text if data_name is amazon
+            if data_name == "amazon":
+                X_train = data["X_train"].flatten()
+                X_test = data["X_test"].flatten()
+                X_calib = data["X_calib"].flatten()
+
+                tfidf = TfidfVectorizer(max_features=500)
+                X_train = tfidf.fit_transform(X_train).toarray()
+                X_test = tfidf.transform(X_test).toarray()
+                X_calib = tfidf.transform(X_calib).toarray()
+                features = tfidf.get_feature_names_out()
+                np.savetxt(f"data/processed/amazon_features_{it}", features, fmt="%s")
+
+                data["X_train"] = X_train
+                data["X_test"] = X_test
+                data["X_calib"] = X_calib
+
             X_test, y_test = data["X_test"], data["y_test"]
 
             # fitting base model
@@ -188,7 +199,7 @@ def compute_metrics(
                 is_fitted=is_fitted,
                 alpha=sig,
                 split_calib=split_calib,
-                **kwargs
+                **kwargs,
             )
             locart_obj.fit(data["X_train"], data["y_train"])
             locart_obj.calib(
@@ -240,9 +251,7 @@ def compute_metrics(
             smis_vector[it, 0] = smis(locart_pred, y_test, alpha=sig)
 
             # mean interval length
-            mean_int_length_vector[it, 0] = np.mean(
-                compute_interval_length(locart_pred)
-            )
+            mean_int_length_vector[it, 0] = np.mean(compute_interval_length(locart_pred))
 
             # interval length | coveraqe
             cover_idx = np.where(marg_cover == 1)
@@ -251,8 +260,6 @@ def compute_metrics(
             )
 
             # correlations
-            pcor_vector[it, 0] = pearson_correlation(locart_pred, y_test)
-            HSIC_vector[it, 0] = HSIC_correlation(locart_pred, y_test)
 
             # deletting objects and removing from memory
             del locart_obj
@@ -270,7 +277,7 @@ def compute_metrics(
                 is_fitted=is_fitted,
                 alpha=sig,
                 split_calib=split_calib,
-                **kwargs
+                **kwargs,
             )
             rf_locart_obj.fit(data["X_train"], data["y_train"])
             rf_locart_obj.calib(
@@ -314,9 +321,7 @@ def compute_metrics(
             # smis
             smis_vector[it, 1] = smis(rf_locart_pred, y_test, alpha=sig)
 
-            #  correlations
-            pcor_vector[it, 1] = pearson_correlation(rf_locart_pred, y_test)
-            HSIC_vector[it, 1] = HSIC_correlation(rf_locart_pred, y_test)
+            # correlations
 
             # mean interval length
             mean_int_length_vector[it, 1] = np.mean(
@@ -355,7 +360,7 @@ def compute_metrics(
                 alpha=sig,
                 split_calib=split_calib,
                 weighting=True,
-                **kwargs
+                **kwargs,
             )
             dlocart_obj.fit(data["X_train"], data["y_train"])
             dlocart_obj.calib(
@@ -399,19 +404,12 @@ def compute_metrics(
             # smis
             smis_vector[it, 2] = smis(dlocart_pred, y_test, alpha=sig)
 
-            pcor_vector[it, 2] = pearson_correlation(dlocart_pred, y_test)
-            HSIC_vector[it, 2] = HSIC_correlation(dlocart_pred, y_test)
-
             # mean interval length
-            mean_int_length_vector[it, 2] = np.mean(
-                compute_interval_length(dlocart_pred)
-            )
+            mean_int_length_vector[it, 2] = np.mean(compute_interval_length(dlocart_pred))
 
             # marginal coverage
             marg_cover = (
-                np.logical_and(
-                    y_test >= dlocart_pred[:, 0], y_test <= dlocart_pred[:, 1]
-                )
+                np.logical_and(y_test >= dlocart_pred[:, 0], y_test <= dlocart_pred[:, 1])
                 + 0
             )
             mean_coverage_vector[it, 2] = np.mean(marg_cover)
@@ -439,7 +437,7 @@ def compute_metrics(
                 alpha=sig,
                 split_calib=split_calib,
                 weighting=True,
-                **kwargs
+                **kwargs,
             )
             rf_dlocart_obj.fit(data["X_train"], data["y_train"])
             rf_dlocart_obj.calib(
@@ -487,9 +485,6 @@ def compute_metrics(
             mean_int_length_vector[it, 3] = np.mean(
                 compute_interval_length(rf_dlocart_pred)
             )
-
-            pcor_vector[it, 3] = pearson_correlation(rf_dlocart_pred, y_test)
-            HSIC_vector[it, 3] = HSIC_correlation(rf_dlocart_pred, y_test)
 
             # marginal coverage
             marg_cover = (
@@ -549,9 +544,6 @@ def compute_metrics(
             # smis
             smis_vector[it, 4] = smis(acpi_pred, y_test, alpha=sig)
 
-            pcor_vector[it, 4] = pearson_correlation(acpi_pred, y_test)
-            HSIC_vector[it, 4] = HSIC_correlation(acpi_pred, y_test)
-
             # mean interval length
             mean_int_length_vector[it, 4] = np.mean(compute_interval_length(acpi_pred))
 
@@ -584,7 +576,7 @@ def compute_metrics(
                 is_fitted=is_fitted,
                 alpha=sig,
                 split_calib=split_calib,
-                **kwargs
+                **kwargs,
             )
             wlocart_obj.fit(data["X_train"], data["y_train"])
             wlocart_obj.calib(
@@ -628,19 +620,12 @@ def compute_metrics(
             # smis
             smis_vector[it, 5] = smis(wlocart_pred, y_test, alpha=sig)
 
-            pcor_vector[it, 5] = pearson_correlation(wlocart_pred, y_test)
-            HSIC_vector[it, 5] = HSIC_correlation(wlocart_pred, y_test)
-
             # mean interval length
-            mean_int_length_vector[it, 5] = np.mean(
-                compute_interval_length(wlocart_pred)
-            )
+            mean_int_length_vector[it, 5] = np.mean(compute_interval_length(wlocart_pred))
 
             # marginal coverage
             marg_cover = (
-                np.logical_and(
-                    y_test >= wlocart_pred[:, 0], y_test <= wlocart_pred[:, 1]
-                )
+                np.logical_and(y_test >= wlocart_pred[:, 0], y_test <= wlocart_pred[:, 1])
                 + 0
             )
             mean_coverage_vector[it, 5] = np.mean(marg_cover)
@@ -694,9 +679,6 @@ def compute_metrics(
 
             # icp smis
             smis_vector[it, 6] = smis(icp_pred, y_test, alpha=sig)
-
-            pcor_vector[it, 6] = pearson_correlation(icp_pred, y_test)
-            HSIC_vector[it, 6] = HSIC_correlation(icp_pred, y_test)
 
             # ICP interval length
             mean_int_length_vector[it, 6] = np.mean(compute_interval_length(icp_pred))
@@ -755,9 +737,6 @@ def compute_metrics(
             # smis
             smis_vector[it, 7] = smis(wicp_pred, y_test, alpha=sig)
 
-            pcor_vector[it, 7] = pearson_correlation(wicp_pred, y_test)
-            HSIC_vector[it, 7] = HSIC_correlation(wicp_pred, y_test)
-
             # ICP interval length
             mean_int_length_vector[it, 7] = np.mean(compute_interval_length(wicp_pred))
 
@@ -813,9 +792,6 @@ def compute_metrics(
 
             # smis
             smis_vector[it, 8] = smis(micp_pred, y_test, alpha=sig)
-
-            pcor_vector[it, 8] = pearson_correlation(micp_pred, y_test)
-            HSIC_vector[it, 8] = HSIC_correlation(micp_pred, y_test)
 
             # ICP interval length
             mean_int_length_vector[it, 8] = np.mean(compute_interval_length(micp_pred))
@@ -901,18 +877,16 @@ def saving_metrics(
     times,
 ):
     # checking if path exsist
-    if not (path.exists(original_path + folder_path + var_path)):
+    if not os.path.isdir(original_path + folder_path + var_path):
         # creating directory
-        os.mkdir(original_path + folder_path + var_path)
+        os.makedirs(original_path + folder_path + var_path)
 
     # changing working directory to the current folder
     os.chdir(original_path + folder_path + var_path)
 
     # saving all matrices into npy files
     # interval length
-    np.save(
-        "mean_interval_length_{}_data.npy".format(data_name), mean_int_length_vector
-    )
+    np.save("mean_interval_length_{}_data.npy".format(data_name), mean_int_length_vector)
 
     np.save(
         "mean_interval_length_cover_{}_data.npy".format(data_name),
