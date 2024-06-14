@@ -219,7 +219,7 @@ def compute_metrics_sim(
                 y_test = r_kind(X_grid, B=1).flatten()
 
                 # simulating train and calibration sets
-                sim_kind(2 * n_train, random_seed=random_seed)
+                sim_kind(2 * n_train, random_seed=seed)
                 data = split(
                     sim_obj.X,
                     sim_obj.y,

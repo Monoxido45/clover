@@ -15,6 +15,7 @@ class simulation:
         hetero_value=1,
         asym_value=0.6,
         t_degree=4,
+        rate = 1,
     ):
         self.dim = dim
         self.coef = coef
@@ -23,6 +24,7 @@ class simulation:
         self.hetero_value = hetero_value
         self.asym_value = asym_value
         self.t_degree = t_degree
+        self.rate = rate
 
     def change_dim(self, new_dim):
         self.dim = new_dim
@@ -172,6 +174,33 @@ class simulation:
             )
         self.X, self.y = X, y
         self.kind = "non_cor_heteroscedastic"
+    
+    def splitted_exp(self, n, random_seed=1250):
+        np.random.seed(random_seed)
+        X = np.random.uniform(low= 0, high=1, size=(n, self.dim))
+        mad_exp = 2 / (np.exp(1) * self.rate)
+
+        if self.noise:
+            y = (
+                (self.coef * X[:, 0] ** 2)
+                + ((X[:, 0] <= 0.5) * np.random.laplace(0, mad_exp, size=n))
+                + (
+                    (X[:, 0] > 0.5)
+                    * (np.random.exponential(1 / self.rate, size=n) - (1 / self.rate))
+                )
+            )
+        else:
+            y = (
+                (self.coef * np.mean(X[:, np.arange(0, self.vars)]** 2, axis = 1))
+                + ((np.mean(X[:, np.arange(0, self.vars)], axis = 1) <= 0.5) * np.random.laplace(0, mad_exp, size=n))
+                + (
+                    (np.mean(X[:, np.arange(0, self.vars)], axis = 1) > 0.5)
+                    * (np.random.exponential(1 / self.rate, size=n) - (1 / self.rate))
+                )
+            )
+
+        self.X, self.y = X, y
+        self.kind = "splitted_exp"
 
     def homoscedastic_quantiles(self, X_grid, sig):
         q = [sig / 2, 1 - sig / 2]
@@ -271,6 +300,27 @@ class simulation:
                     ),
                     size=B,
                 )
+        return y_mat
+    
+    def splitted_exp_r(self, X_grid, B=1000):
+        y_mat = np.zeros((X_grid.shape[0], B))
+        mad_exp = 2 / (np.exp(1) * self.rate)
+
+        for i in range(X_grid.shape[0]):
+            if self.noise:
+                if X_grid[i] <= 0.5:
+                    y_mat[i, :] = np.random.laplace(self.coef * X_grid[i] ** 2, scale=mad_exp, size=B)
+                else:
+                    y_mat[i, :] = (self.coef * X_grid[i] ** 2) + (
+                        np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
+                    )
+            else:
+                if np.mean(X_grid[i, np.arange(0, self.vars)]) <= 0.5:
+                    y_mat[i, :] = np.random.laplace(self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]**2), scale=mad_exp, size=B)
+                else:
+                    y_mat[i, :] = (self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]**2)) + (
+                        np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
+                    )
         return y_mat
 
     def asymmetric_r(self, X_grid, B=1000):
