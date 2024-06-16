@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import stats
-from scipy.special import erfinv, beta, betainc
+from scipy.special import beta, betainc
 from sklearn.utils import check_random_state
 
 
@@ -9,13 +9,13 @@ def make_correlated_design(n_samples, n_features, rho=0.5, random_state=None):
 
     if rho != 0:
         sigma = np.sqrt(1 - rho * rho)
-        U = 0.25 * rng.randn(n_samples)
+        U = rng.randn(n_samples)
 
         X = np.empty([n_samples, n_features], order="F")
         X[:, 0] = U
         for j in range(1, n_features):
             U *= rho
-            U += sigma * (0.25 * rng.randn(n_samples))
+            U += sigma * rng.randn(n_samples)
             X[:, j] = U
     else:
         X = rng.randn(n_samples, n_features)
@@ -34,7 +34,7 @@ class simulation:
         asym_value=0.6,
         t_degree=4,
         rho=0.7,
-        rate = 1,
+        rate=1,
     ):
         self.dim = dim
         self.coef = coef
@@ -159,23 +159,22 @@ class simulation:
             )
         self.X, self.y = X, y
         self.kind = "heteroscedastic"
-    
 
     def correlated_heteroscedastic(self, n, random_seed=1250):
         X = make_correlated_design(n, self.dim, self.rho, random_seed)
 
         if self.noise:
             y = np.random.normal(
-                self.coef * X[:, 0], 
-                scale=np.sqrt(self.hetero_value + np.abs(X[:, 0]/4)),
+                self.coef * X[:, 0],
+                scale=np.sqrt(self.hetero_value + np.abs(X[:, 0] / 4)),
                 size=n,
-                )
+            )
         else:
             y = np.random.normal(
                 self.coef * np.mean(X[:, np.arange(0, self.vars)], axis=1),
                 scale=np.sqrt(
                     self.hetero_value
-                    + np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1)/4)
+                    + np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1) / 4)
                 ),
                 size=n,
             )
@@ -231,10 +230,10 @@ class simulation:
             )
         self.X, self.y = X, y
         self.kind = "non_cor_heteroscedastic"
-    
+
     def splitted_exp(self, n, random_seed=1250):
         np.random.seed(random_seed)
-        X = np.random.uniform(low= 0, high=1, size=(n, self.dim))
+        X = np.random.uniform(low=0, high=1, size=(n, self.dim))
         mad_exp = 2 / (np.exp(1) * self.rate)
 
         if self.noise:
@@ -248,10 +247,13 @@ class simulation:
             )
         else:
             y = (
-                (self.coef * np.mean(X[:, np.arange(0, self.vars)]** 2, axis = 1))
-                + ((np.mean(X[:, np.arange(0, self.vars)], axis = 1) <= 0.5) * np.random.laplace(0, mad_exp, size=n))
+                (self.coef * np.mean(X[:, np.arange(0, self.vars)] ** 2, axis=1))
                 + (
-                    (np.mean(X[:, np.arange(0, self.vars)], axis = 1) > 0.5)
+                    (np.mean(X[:, np.arange(0, self.vars)], axis=1) <= 0.5)
+                    * np.random.laplace(0, mad_exp, size=n)
+                )
+                + (
+                    (np.mean(X[:, np.arange(0, self.vars)], axis=1) > 0.5)
                     * (np.random.exponential(1 / self.rate, size=n) - (1 / self.rate))
                 )
             )
@@ -325,7 +327,7 @@ class simulation:
             if self.noise:
                 y_mat[i, :] = np.random.normal(
                     self.coef * X_grid[i],
-                    scale=np.sqrt(self.hetero_value + np.abs(X_grid[i])/4),
+                    scale=np.sqrt(self.hetero_value + np.abs(X_grid[i]) / 4),
                     size=B,
                 )
             else:
@@ -333,7 +335,7 @@ class simulation:
                     self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]),
                     scale=np.sqrt(
                         self.hetero_value
-                        + np.abs(np.mean(X_grid[i, np.arange(0, self.vars)])/4)
+                        + np.abs(np.mean(X_grid[i, np.arange(0, self.vars)]) / 4)
                     ),
                     size=B,
                 )
@@ -376,7 +378,7 @@ class simulation:
                     size=B,
                 )
         return y_mat
-    
+
     def splitted_exp_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
         mad_exp = 2 / (np.exp(1) * self.rate)
@@ -384,21 +386,27 @@ class simulation:
         for i in range(X_grid.shape[0]):
             if self.noise:
                 if X_grid[i] <= 0.5:
-                    y_mat[i, :] = np.random.laplace(self.coef * X_grid[i] ** 2, scale=mad_exp, size=B)
+                    y_mat[i, :] = np.random.laplace(
+                        self.coef * X_grid[i] ** 2, scale=mad_exp, size=B
+                    )
                 else:
                     y_mat[i, :] = (self.coef * X_grid[i] ** 2) + (
                         np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
                     )
             else:
                 if np.mean(X_grid[i, np.arange(0, self.vars)]) <= 0.5:
-                    y_mat[i, :] = np.random.laplace(self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]**2), scale=mad_exp, size=B)
-                else:
-                    y_mat[i, :] = (self.coef * np.mean(X_grid[i, np.arange(0, self.vars)]**2)) + (
-                        np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
+                    y_mat[i, :] = np.random.laplace(
+                        self.coef * np.mean(X_grid[i, np.arange(0, self.vars)] ** 2),
+                        scale=mad_exp,
+                        size=B,
                     )
+                else:
+                    y_mat[i, :] = (
+                        self.coef * np.mean(X_grid[i, np.arange(0, self.vars)] ** 2)
+                    ) + (np.random.exponential(1 / self.rate, size=B) - (1 / self.rate))
         return y_mat
-    
-    def correlated_homoscedastic_r(self, X_grid, B = 1000):
+
+    def correlated_homoscedastic_r(self, X_grid, B=1000):
         y_mat = np.zeros((X_grid.shape[0], B))
         for i in range(X_grid.shape[0]):
             if self.noise:
