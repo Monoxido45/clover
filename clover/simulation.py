@@ -34,6 +34,7 @@ class simulation:
         asym_value=0.6,
         t_degree=4,
         rho=0.7,
+        hetero_exp=0.5,
         rate=1,
     ):
         self.dim = dim
@@ -44,6 +45,7 @@ class simulation:
         self.asym_value = asym_value
         self.t_degree = t_degree
         self.rate = rate
+        self.hetero_exp = hetero_exp
         self.rho = rho
 
     def change_dim(self, new_dim):
@@ -244,7 +246,7 @@ class simulation:
                 (X[:, 0] ** 2)
                 + (
                     (X[:, 0] <= 0)
-                    * np.random.normal(0, self.hetero_value + np.abs(X[:, 0]), size=n)
+                    * np.random.normal(0, self.hetero_exp + np.abs(X[:, 0]), size=n)
                 )
                 + (
                     (X[:, 0] > 0)
@@ -258,7 +260,7 @@ class simulation:
                     (np.mean(X[:, np.arange(0, self.vars)], axis=1) <= 0)
                     * np.random.normal(
                         0,
-                        self.hetero_value
+                        self.hetero_exp
                         + np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1)),
                         size=n,
                     )
@@ -402,7 +404,7 @@ class simulation:
                 if X_grid[i] <= 0:
                     y_mat[i, :] = np.random.normal(
                         X_grid[i] ** 2,
-                        scale=self.hetero_value + np.abs(X_grid[i]),
+                        scale=self.hetero_exp + np.abs(X_grid[i]),
                         size=B,
                     )
                 else:
@@ -413,14 +415,14 @@ class simulation:
                 if np.mean(X_grid[i, np.arange(0, self.vars)]) <= 0:
                     y_mat[i, :] = np.random.normal(
                         np.mean(X_grid[i, np.arange(0, self.vars)] ** 2),
-                        scale=self.hetero_value
+                        scale=self.hetero_exp
                         + np.abs(np.mean(X_grid[i, np.arange(0, self.vars)])),
                         size=B,
                     )
                 else:
-                    y_mat[i, :] = (
-                        self.coef * np.mean(X_grid[i, np.arange(0, self.vars)] ** 2)
-                    ) + (np.random.exponential(1 / self.rate, size=B) - (1 / self.rate))
+                    y_mat[i, :] = (np.mean(X_grid[i, np.arange(0, self.vars)] ** 2)) + (
+                        np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
+                    )
         return y_mat
 
     def correlated_homoscedastic_r(self, X_grid, B=1000):
