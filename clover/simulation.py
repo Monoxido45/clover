@@ -15,7 +15,7 @@ def make_correlated_design(n_samples, n_features, rho=0.5, random_state=None):
         X[:, 0] = U
         for j in range(1, n_features):
             U *= rho
-            U += sigma * (rng.randn(n_samples))
+            U += sigma * rng.randn(n_samples)
             X[:, j] = U
     else:
         X = rng.randn(n_samples, n_features)
@@ -418,9 +418,9 @@ class simulation:
                         size=B,
                     )
                 else:
-                    y_mat[i, :] = (np.mean(X_grid[i, np.arange(0, self.vars)] ** 2)) + (
-                        np.random.exponential(1 / self.rate, size=B) - (1 / self.rate)
-                    )
+                    y_mat[i, :] = (
+                        self.coef * np.mean(X_grid[i, np.arange(0, self.vars)] ** 2)
+                    ) + (np.random.exponential(1 / self.rate, size=B) - (1 / self.rate))
         return y_mat
 
     def correlated_homoscedastic_r(self, X_grid, B=1000):

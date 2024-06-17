@@ -463,9 +463,7 @@ class LocartSplit(BaseEstimator):
 
         elif type_model == "euclidean":
             idx = self.uniform_apply(X)
-            cutoffs = self.unif_cutoffs[
-                st.rankdata(idx.astype(int), method="dense") - 1
-            ]
+            cutoffs = self.unif_cutoffs[st.rankdata(idx.astype(int), method="dense") - 1]
             pred = self.nc_score.predict(X, cutoffs)
 
         return pred
@@ -477,11 +475,9 @@ class RegressionSplit(BaseEstimator):
     ----------------------------------------------------------------
     """
 
-    def __init__(self, base_model, alpha, is_fitted=False, **kwargs) -> None:
+    def __init__(self, base_model, alpha=0.1, is_fitted=False, **kwargs) -> None:
         super().__init__()
-        self.nc_score = RegressionScore(
-            base_model, is_fitted=is_fitted, alpha=alpha, **kwargs
-        )
+        self.nc_score = RegressionScore(base_model, is_fitted=is_fitted, **kwargs)
         self.alpha = alpha
 
     def fit(self, X_train, y_train):
