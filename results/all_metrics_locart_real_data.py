@@ -46,11 +46,7 @@ def compute_metrics(
     sig=0.1,
     test_size=0.2,
     is_fitted=True,
-    valid_test_size=0.3,
-    valid_split=False,
-    valid_min_sample=150,
     save_all=True,
-    valid_prune=True,
     calib_size=0.5,
     random_seed=1250,
     random_projections=False,
@@ -86,7 +82,9 @@ def compute_metrics(
     print("Number of samples used for testing: {}".format(test_size * X.shape[0]))
 
     # managing directories
-    folder_path = "/results/pickle_files/real_data_experiments/{}_data".format(data_name)
+    folder_path = "/results/pickle_files/real_data_experiments/{}_data".format(
+        data_name
+    )
 
     # creating directories to each file
     if not os.path.isdir(original_path + folder_path):
@@ -104,17 +102,11 @@ def compute_metrics(
             print("running the experiments for {} data".format(data_name))
             # measures to be saved at last
             # estimated measures
-            smis_vector, pcor_vector, HSIC_vector = (
-                np.zeros((n_it, 9)),
-                np.zeros((n_it, 9)),
-                np.zeros((n_it, 9)),
-            )
-            mean_valid_pred_set, max_valid_pred_set = np.zeros((n_it, 9)), np.zeros(
+            (smis_vector,) = np.zeros((n_it, 9))
+
+            mean_int_length_vector, mean_coverage_vector = np.zeros(
                 (n_it, 9)
-            )
-            mean_int_length_vector, mean_coverage_vector = np.zeros((n_it, 9)), np.zeros(
-                (n_it, 9)
-            )
+            ), np.zeros((n_it, 9))
             mean_int_length_cover_vector = np.zeros((n_it, 9))
 
             # running times
@@ -129,20 +121,12 @@ def compute_metrics(
                 "mean_interval_length_{}_data.npy".format(data_name)
             )
 
-            mean_coverage_vector = np.load("mean_coverage_{}_data.npy".format(data_name))
-
-            mean_valid_pred_set, max_valid_pred_set = (
-                np.load("mean_valid_pred_set_{}_data.npy".format(data_name)),
-                np.load("max_valid_pred_set_{}_data.npy".format(data_name)),
+            mean_coverage_vector = np.load(
+                "mean_coverage_{}_data.npy".format(data_name)
             )
 
             # estimated measures
             smis_vector = np.load("smis_{}_data.npy".format(data_name))
-
-            pcor_vector, HSIC_vector = (
-                np.load("pcor_{}_data", format(data_name)),
-                np.load("HISC_{}_data").format(data_name),
-            )
 
             mean_int_length_cover_vector = np.load(
                 "mean_interval_length_cover_{}_data.npy".format(data_name)
@@ -221,25 +205,6 @@ def compute_metrics(
             # predictions
             locart_pred = np.array(locart_obj.predict(X_test))
 
-            # valid pred sets
-            locart_valid = Valid_pred_sets(
-                conf=locart_obj,
-                alpha=sig,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            locart_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 0],
-                max_valid_pred_set[it, 0],
-            ) = locart_valid.compute_dif()
-
             # marginal coverage
             marg_cover = (
                 np.logical_and(y_test >= locart_pred[:, 0], y_test <= locart_pred[:, 1])
@@ -251,7 +216,9 @@ def compute_metrics(
             smis_vector[it, 0] = smis(locart_pred, y_test, alpha=sig)
 
             # mean interval length
-            mean_int_length_vector[it, 0] = np.mean(compute_interval_length(locart_pred))
+            mean_int_length_vector[it, 0] = np.mean(
+                compute_interval_length(locart_pred)
+            )
 
             # interval length | coveraqe
             cover_idx = np.where(marg_cover == 1)
@@ -263,7 +230,6 @@ def compute_metrics(
 
             # deletting objects and removing from memory
             del locart_obj
-            del locart_valid
             del locart_pred
             del cover_idx
             gc.collect()
@@ -295,34 +261,6 @@ def compute_metrics(
 
             end_loc = time.time() - start_loc
             times[it, 1] = end_loc
-
-            # predictions
-            rf_locart_pred = np.array(rf_locart_obj.predict(X_test))
-
-            # valid pred sets
-            rf_locart_valid = Valid_pred_sets(
-                conf=rf_locart_obj,
-                alpha=sig,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            rf_locart_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 1],
-                max_valid_pred_set[it, 1],
-            ) = rf_locart_valid.compute_dif()
-
-            # smis
-            smis_vector[it, 1] = smis(rf_locart_pred, y_test, alpha=sig)
-
-            # correlations
-
             # mean interval length
             mean_int_length_vector[it, 1] = np.mean(
                 compute_interval_length(rf_locart_pred)
@@ -345,7 +283,6 @@ def compute_metrics(
 
             # deletting objects and removing from memory
             del rf_locart_obj
-            del rf_locart_valid
             del rf_locart_pred
             del cover_idx
             gc.collect()
@@ -382,34 +319,19 @@ def compute_metrics(
             # predictions
             dlocart_pred = np.array(dlocart_obj.predict(X_test))
 
-            # valid pred sets
-            dlocart_valid = Valid_pred_sets(
-                conf=dlocart_obj,
-                alpha=sig,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            dlocart_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 2],
-                max_valid_pred_set[it, 2],
-            ) = dlocart_valid.compute_dif()
-
             # smis
             smis_vector[it, 2] = smis(dlocart_pred, y_test, alpha=sig)
 
             # mean interval length
-            mean_int_length_vector[it, 2] = np.mean(compute_interval_length(dlocart_pred))
+            mean_int_length_vector[it, 2] = np.mean(
+                compute_interval_length(dlocart_pred)
+            )
 
             # marginal coverage
             marg_cover = (
-                np.logical_and(y_test >= dlocart_pred[:, 0], y_test <= dlocart_pred[:, 1])
+                np.logical_and(
+                    y_test >= dlocart_pred[:, 0], y_test <= dlocart_pred[:, 1]
+                )
                 + 0
             )
             mean_coverage_vector[it, 2] = np.mean(marg_cover)
@@ -422,7 +344,6 @@ def compute_metrics(
 
             # deletting objects and removing from memory
             del dlocart_obj
-            del dlocart_valid
             del dlocart_pred
             del cover_idx
             gc.collect()
@@ -459,25 +380,6 @@ def compute_metrics(
             # predictions
             rf_dlocart_pred = np.array(rf_dlocart_obj.predict(X_test))
 
-            # valid pred sets
-            rf_dlocart_valid = Valid_pred_sets(
-                conf=rf_dlocart_obj,
-                alpha=sig,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            rf_dlocart_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 3],
-                max_valid_pred_set[it, 3],
-            ) = rf_dlocart_valid.compute_dif()
-
             # smis
             smis_vector[it, 3] = smis(rf_dlocart_pred, y_test, alpha=sig)
 
@@ -503,7 +405,6 @@ def compute_metrics(
 
             # deletting objects and removing from memory
             del rf_dlocart_obj
-            del rf_dlocart_valid
             del rf_dlocart_pred
             del cover_idx
             gc.collect()
@@ -520,26 +421,6 @@ def compute_metrics(
             times[it, 4] = end_loc
 
             acpi_pred = np.stack((acpi.predict_pi(X_test, method="qrf")), axis=-1)
-
-            # valid pred sets
-            acpi_valid = Valid_pred_sets(
-                conf=acpi,
-                alpha=sig,
-                islcp=True,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            acpi_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 4],
-                max_valid_pred_set[it, 4],
-            ) = acpi_valid.compute_dif()
 
             # smis
             smis_vector[it, 4] = smis(acpi_pred, y_test, alpha=sig)
@@ -561,7 +442,6 @@ def compute_metrics(
 
             # deletting objects and removing from memory
             del acpi
-            del acpi_valid
             del acpi_pred
             del cover_idx
             gc.collect()
@@ -598,34 +478,19 @@ def compute_metrics(
             # predictions
             wlocart_pred = np.array(wlocart_obj.predict(X_test))
 
-            # valid pred sets
-            wlocart_valid = Valid_pred_sets(
-                conf=wlocart_obj,
-                alpha=sig,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            wlocart_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 5],
-                max_valid_pred_set[it, 5],
-            ) = wlocart_valid.compute_dif()
-
             # smis
             smis_vector[it, 5] = smis(wlocart_pred, y_test, alpha=sig)
 
             # mean interval length
-            mean_int_length_vector[it, 5] = np.mean(compute_interval_length(wlocart_pred))
+            mean_int_length_vector[it, 5] = np.mean(
+                compute_interval_length(wlocart_pred)
+            )
 
             # marginal coverage
             marg_cover = (
-                np.logical_and(y_test >= wlocart_pred[:, 0], y_test <= wlocart_pred[:, 1])
+                np.logical_and(
+                    y_test >= wlocart_pred[:, 0], y_test <= wlocart_pred[:, 1]
+                )
                 + 0
             )
             mean_coverage_vector[it, 5] = np.mean(marg_cover)
@@ -638,7 +503,6 @@ def compute_metrics(
 
             # deletting objects and removing from memory
             del wlocart_obj
-            del wlocart_valid
             del wlocart_pred
             del cover_idx
             gc.collect()
@@ -656,26 +520,6 @@ def compute_metrics(
 
             # predictions
             icp_pred = icp.predict(X_test, significance=sig)
-
-            # valid pred sets
-            icp_valid = Valid_pred_sets(
-                conf=icp,
-                alpha=sig,
-                isnc=True,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            icp_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 6],
-                max_valid_pred_set[it, 6],
-            ) = icp_valid.compute_dif()
 
             # icp smis
             smis_vector[it, 6] = smis(icp_pred, y_test, alpha=sig)
@@ -698,7 +542,6 @@ def compute_metrics(
             # deletting objects and removing from memory
             del icp
             del new_model
-            del icp_valid
             del icp_pred
             del cover_idx
             gc.collect()
@@ -714,25 +557,6 @@ def compute_metrics(
 
             # predictions
             wicp_pred = wicp.predict(X_test)
-
-            # valid pred sets
-            wicp_valid = Valid_pred_sets(
-                conf=wicp,
-                alpha=sig,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            wicp_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 7],
-                max_valid_pred_set[it, 7],
-            ) = wicp_valid.compute_dif()
 
             # smis
             smis_vector[it, 7] = smis(wicp_pred, y_test, alpha=sig)
@@ -753,7 +577,6 @@ def compute_metrics(
             )
 
             del wicp
-            del wicp_valid
             del wicp_pred
             del cover_idx
             gc.collect()
@@ -770,25 +593,6 @@ def compute_metrics(
 
             # predictions
             micp_pred = micp.predict(X_test)
-
-            # valid pred sets
-            micp_valid = Valid_pred_sets(
-                conf=micp,
-                alpha=sig,
-                coverage_evaluator="CART",
-                prune=valid_prune,
-                split_train=valid_split,
-            )
-            micp_valid.fit(
-                X_test,
-                y_test,
-                test_size=valid_test_size,
-                min_samples_leaf=valid_min_sample,
-            )
-            (
-                mean_valid_pred_set[it, 8],
-                max_valid_pred_set[it, 8],
-            ) = micp_valid.compute_dif()
 
             # smis
             smis_vector[it, 8] = smis(micp_pred, y_test, alpha=sig)
@@ -809,7 +613,6 @@ def compute_metrics(
             )
 
             del micp
-            del micp_valid
             del micp_pred
             del cover_idx
             gc.collect()
@@ -826,10 +629,6 @@ def compute_metrics(
                     mean_int_length_cover_vector,
                     mean_coverage_vector,
                     smis_vector,
-                    mean_valid_pred_set,
-                    max_valid_pred_set,
-                    pcor_vector,
-                    HSIC_vector,
                     times,
                 )
 
@@ -843,10 +642,6 @@ def compute_metrics(
                 mean_int_length_cover_vector,
                 mean_coverage_vector,
                 smis_vector,
-                mean_valid_pred_set,
-                max_valid_pred_set,
-                pcor_vector,
-                HSIC_vector,
                 times,
             )
 
@@ -870,10 +665,6 @@ def saving_metrics(
     mean_int_length_cover_vector,
     mean_coverage_vector,
     smis_vector,
-    mean_valid_pred_set,
-    max_valid_pred_set,
-    pcor_vector,
-    HSIC_vector,
     times,
 ):
     # checking if path exsist
@@ -886,7 +677,9 @@ def saving_metrics(
 
     # saving all matrices into npy files
     # interval length
-    np.save("mean_interval_length_{}_data.npy".format(data_name), mean_int_length_vector)
+    np.save(
+        "mean_interval_length_{}_data.npy".format(data_name), mean_int_length_vector
+    )
 
     np.save(
         "mean_interval_length_cover_{}_data.npy".format(data_name),
@@ -898,12 +691,6 @@ def saving_metrics(
 
     # estimated metrics
     np.save("smis_{}_data.npy".format(data_name), smis_vector)
-
-    np.save("mean_valid_pred_set_{}_data.npy".format(data_name), mean_valid_pred_set)
-    np.save("max_valid_pred_set_{}_data.npy".format(data_name), max_valid_pred_set)
-
-    np.save("pcor_{}_data.npy".format(data_name), pcor_vector)
-    np.save("HSIC_{}_data.npy".format(data_name), HSIC_vector)
 
     # running times
     np.save("run_times_{}_data.npy".format(data_name), times)
