@@ -65,7 +65,6 @@ def create_data_list(
         print("Creating data list")
         # list of data frames
         stat_list = list()
-        corr_list = list()
         for i in range(p.shape[0]):
             # importing the data
             current_folder = (
@@ -76,7 +75,6 @@ def create_data_list(
 
             # looping through all string names
             data_list = []
-            corr_data_list = []
             for string in string_names:
                 current_data = np.load(
                     current_folder
@@ -90,20 +88,6 @@ def create_data_list(
                     current_data = -current_data
                 # data list for extracting means
                 data_list.append(current_data)
-                # transforming in pandas data frame and making a list of data frames to plot correlation more latter
-                corr_data = (
-                    pd.DataFrame(current_data, columns=methods)
-                    .assign(p_var=p[i], metric=string)
-                    .melt(
-                        id_vars=["p_var", "metric"],
-                        value_vars=methods,
-                        var_name="methods",
-                    )
-                )
-                corr_data_list.append(corr_data)
-
-            # adding to correlation data list
-            corr_list.append(pd.concat(corr_data_list))
 
             # obtaining mean vectors in each matrix
             means_list = [np.mean(data, axis=0) for data in data_list]
@@ -137,11 +121,6 @@ def create_data_list(
         # saving to csv and returning
         data_final.to_csv(original_path + folder_path + "/{}_stats.csv".format(kind))
 
-        # doing the same to correlation data
-        data_corr_final = pd.concat(corr_list)
-        data_corr_final.to_csv(
-            original_path + folder_path + "/{}_corr_data.csv".format(kind)
-        )
         return data_final
 
 
