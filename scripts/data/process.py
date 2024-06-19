@@ -74,7 +74,9 @@ def process(dataset, n_samples=None, seed=0):
 
     # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadSuperconductorData.m
     if dataset == "superconductivity":
-        with zipfile.ZipFile(f"data/raw/superconductivity/superconduct.zip", "r") as file:
+        with zipfile.ZipFile(
+            f"data/raw/superconductivity/superconduct.zip", "r"
+        ) as file:
             df = pd.read_csv(file.open("train.csv"))
 
         # First column are urls.
@@ -142,6 +144,18 @@ def process(dataset, n_samples=None, seed=0):
 
         X = df.drop("count", axis=1).values
         y = df["count"].values
+        data = pd.DataFrame(X)
+        data["target"] = y
+
+    if dataset == "SGEMM":
+        df = pd.read_csv("data/raw/SGEMM/sgemm_product.csv")
+
+        # removing last 4 columns to obtain all features
+        X = df.iloc[:, :14].values
+
+        # averaging the last 4 columns to obtain the average performance time
+        y = np.mean(df.iloc[:, 14:].values, axis=1)
+
         data = pd.DataFrame(X)
         data["target"] = y
 

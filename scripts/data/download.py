@@ -21,6 +21,7 @@ URL = {
     "winered": "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/",
     "winewhite": "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/",
     "amazon": "https://www.kaggle.com/datasets/snap/amazon-fine-food-reviews",
+    "SGEMM": "http://archive.ics.uci.edu/dataset/440/sgemm+gpu+kernel+performance",
 }
 FILES = {
     "blog": ["BlogFeedback.zip"],
@@ -35,6 +36,7 @@ FILES = {
     "winered": ["winequality-red.csv", "winequality.names"],
     "winewhite": ["winequality-white.csv", "winequality.names"],
     "amazon": [""],
+    "SGEMM": [""],
 }
 
 output_folder = get_folder(f"data/raw/{DATASET}")
