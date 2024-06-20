@@ -701,13 +701,15 @@ def saving_metrics(
 
 if __name__ == "__main__":
     print("We will now compute all conformal statistics for real data")
-    model = input("Which model would like to use as base model? ")
+    model = input("Which model would like to fit as base model? ")
     data_name = input("Which data would you like to use? ")
+    it = int(input("How many iterations?"))
     if model == "Random Forest":
         random_state = 650
 
         print("Starting real data experiment")
         exp_time = compute_metrics(
+            n_it=it,
             data_name=data_name,
             base_model=RandomForestRegressor,
             random_state=random_state,
@@ -724,7 +726,7 @@ if __name__ == "__main__":
     elif model == "KNN":
         print("Starting real data experiment")
         exp_time = compute_metrics(
-            data_name=data_name, base_model=KNeighborsRegressor, n_neighbors=30
+            n_it=it, data_name=data_name, base_model=KNeighborsRegressor, n_neighbors=30
         )
         print("Time elapsed to conduct all experiments: {}".format(exp_time))
 
