@@ -102,7 +102,7 @@ def compute_metrics(
             print("running the experiments for {} data".format(data_name))
             # measures to be saved at last
             # estimated measures
-            (smis_vector,) = np.zeros((n_it, 9))
+            smis_vector = np.zeros((n_it, 9))
 
             mean_int_length_vector, mean_coverage_vector = np.zeros(
                 (n_it, 9)
