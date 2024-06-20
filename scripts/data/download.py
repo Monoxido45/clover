@@ -22,6 +22,8 @@ URL = {
     "winewhite": "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/",
     "amazon": "https://www.kaggle.com/datasets/snap/amazon-fine-food-reviews",
     "SGEMM": "http://archive.ics.uci.edu/dataset/440/sgemm+gpu+kernel+performance",
+    "yearprediction": "https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/regression.html#YearPredictionMSD",
+    "WEC": "http://archive.ics.uci.edu/dataset/882/large-scale+wave+energy+farm",
 }
 FILES = {
     "blog": ["BlogFeedback.zip"],
@@ -37,6 +39,8 @@ FILES = {
     "winewhite": ["winequality-white.csv", "winequality.names"],
     "amazon": [""],
     "SGEMM": [""],
+    "yearprediction": [""],
+    "WEC": [""],
 }
 
 output_folder = get_folder(f"data/raw/{DATASET}")

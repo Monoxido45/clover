@@ -9,7 +9,7 @@ from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
 from tqdm import tqdm
 
-
+from sklearn.datasets import load_svmlight_file
 from utils import get_folder
 
 parser = argparse.ArgumentParser()
@@ -27,7 +27,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-def process(dataset, n_samples=None, seed=0):
+def process(dataset, n_samples=None, seed=125):
     # Based on https://github.com/AIgen/QOOB/blob/master/MATLAB/data/loadBlogData.m
     if dataset == "blog":
         with zipfile.ZipFile(f"data/raw/blog/BlogFeedback.zip", "r") as file:
@@ -155,6 +155,32 @@ def process(dataset, n_samples=None, seed=0):
 
         # averaging the last 4 columns to obtain the average performance time
         y = np.mean(df.iloc[:, 14:].values, axis=1)
+
+        data = pd.DataFrame(X)
+        data["target"] = y
+
+    if dataset == "yearprediction":
+        X, y = load_svmlight_file(
+            "data/raw/yearprediction/YearPredictionMSD.bz2",
+            zero_based=True,
+            n_features=91,
+        )
+
+        data = pd.DataFrame(X.toarray()[:, 1:])
+        data["target"] = y
+
+    if dataset == "WEC":
+        data_names = [
+            "WEC_Perth_49",
+            "WEC_Sydney_49",
+        ]
+        data_list = list()
+        for data in data_names:
+            data_list.append(pd.read_csv(f"data/raw/WEC/{data}.csv"))
+        data_final = pd.concat(data_list)
+        # selecting only the covariates
+        X = data_final.loc[:, :"Y49"].values
+        y = data_final.loc[:, "Total_Power"].values
 
         data = pd.DataFrame(X)
         data["target"] = y

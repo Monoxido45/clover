@@ -20,7 +20,7 @@ from pandas.api.types import CategoricalDtype
 
 original_path = os.getcwd()
 # plotting object (if needed)
-plt.style.use("seaborn-white")
+plt.style.use("seaborn-v0_8-white")
 sns.set_palette("tab10")
 plt.rcParams.update({"font.size": 12})
 
