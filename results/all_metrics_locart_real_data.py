@@ -261,6 +261,13 @@ def compute_metrics(
 
             end_loc = time.time() - start_loc
             times[it, 1] = end_loc
+
+            # predictions
+            rf_locart_pred = np.array(rf_locart_obj.predict(X_test))
+
+            # smis
+            smis_vector[it, 1] = smis(rf_locart_pred, y_test, alpha=sig)
+
             # mean interval length
             mean_int_length_vector[it, 1] = np.mean(
                 compute_interval_length(rf_locart_pred)
