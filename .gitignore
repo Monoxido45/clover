@@ -163,10 +163,10 @@ cython_debug/
 .Rhistory
 results/figures
 results/.ipynb_checkpoints
+results/pickle_files/locart_experiments_results
 
 # removing results
-results/pickle_files
-results/metric_figures
+/results/metric_figures
 
 # remove data 
 data/processed
