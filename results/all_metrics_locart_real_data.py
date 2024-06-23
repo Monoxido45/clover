@@ -11,16 +11,13 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 # conformal methods
-from nonconformist.cp import IcpRegressor
-from nonconformist.nc import NcFactory
 from clover.locart import (
     LocalRegressionSplit,
     LocartSplit,
     MondrianRegressionSplit,
-    QuantileSplit,
+    RegressionSplit,
 )
 from clover.locart import LocartSplit, MondrianRegressionSplit
-from clover.locluster import KmeansSplit
 from clover.scores import RegressionScore, LocalRegressionScore
 
 # importing LCP-RF
@@ -29,7 +26,6 @@ from acpi import ACPI
 # performance measures
 import time
 from clover.utils import compute_interval_length, split, smis
-from clover.valid_pred_sets import Valid_pred_sets
 import gc
 
 # original path
@@ -516,9 +512,7 @@ def compute_metrics(
 
             # fitting default regression split
             start_split = time.time()
-            new_model = base_model(**kwargs)
-            nc = NcFactory.create_nc(new_model)
-            icp = IcpRegressor(nc)
+            icp = RegressionSplit(base_model=model, alpha=sig, is_fitted=True)
             icp.fit(data["X_train"], data["y_train"])
             icp.calibrate(data["X_calib"], data["y_calib"])
 
@@ -548,7 +542,6 @@ def compute_metrics(
 
             # deletting objects and removing from memory
             del icp
-            del new_model
             del icp_pred
             del cover_idx
             gc.collect()

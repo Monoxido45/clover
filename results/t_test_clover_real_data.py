@@ -19,7 +19,7 @@ import scipy.stats as st
 
 original_path = os.getcwd()
 # plotting object (if needed)
-plt.style.use("seaborn-white")
+plt.style.use("seaborn-v0_8-white")
 sns.set_palette("tab10")
 plt.rcParams.update({"font.size": 12})
 
@@ -121,6 +121,7 @@ def create_all_data_t(
         "star",
         "meps19",
         "WEC",
+        "SGEMM",
     ],
 ):
     data_list_t = []
@@ -158,6 +159,7 @@ kind_names = [
     "star",
     "meps19",
     "WEC",
+    "SGEMM",
 ]
 
 
@@ -364,7 +366,7 @@ ordered_counts_dict_all
 
 # plotting barplot and saving
 images_dir = "results/metric_figures"
-results_real = "performance_real/general_results"
+results_real = "performance_real/t_results/general_results"
 
 # plotting count of data into two barplots
 fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(12, 6))
