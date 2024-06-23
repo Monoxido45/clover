@@ -93,6 +93,7 @@ if __name__ == "__main__":
     print("We will now compute all base model for each real data")
     model = input("Which model would like to use as base model? ")
     data = input("Which data would you like to select? ")
+    n_it = int(input("How many iterations?"))
     if model == "Random Forest":
         random_state = 650
-        run_base_model_real(data_name=data, random_state=random_state)
+        run_base_model_real(data_name=data, n_it = n_it, random_state=random_state)
