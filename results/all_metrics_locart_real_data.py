@@ -67,15 +67,27 @@ def compute_metrics(
     data = pd.read_csv(data_path)
 
     # separating y and X arrays
-    y = data["target"].to_numpy()
-    X = data.drop("target", axis=1).to_numpy()
-
-    print(
+    if data_name == "amazon":
+        y_all = data["target"].to_numpy()
+        X_all = data.drop("target", axis=1).to_numpy()
+    else:
+        y = data["target"].to_numpy()
+        X = data.drop("target", axis=1).to_numpy()
+    
+    if data_name == "amazon":
+        print(
         "Number of samples that will be used for training and calibration: {}".format(
-            (1 - test_size) * X.shape[0]
+            (1 - test_size) * X_all.shape[0]
         )
     )
-    print("Number of samples used for testing: {}".format(test_size * X.shape[0]))
+        print("Number of samples used for testing: {}".format(test_size * X_all.shape[0]))
+    else:
+        print(
+            "Number of samples that will be used for training and calibration: {}".format(
+                (1 - test_size) * X.shape[0]
+            )
+        )
+        print("Number of samples used for testing: {}".format(test_size * X.shape[0]))
 
     # managing directories
     folder_path = "/results/pickle_files/real_data_experiments/{}_data".format(
@@ -94,6 +106,7 @@ def compute_metrics(
     # if not, we run all and save all together in the same folder
     var_path = "/{}_data_score_regression_measures".format(data_name)
     if not (path.exists(original_path + folder_path + var_path)) or completing:
+        
         if not completing:
             print("running the experiments for {} data".format(data_name))
             # measures to be saved at last
@@ -141,7 +154,7 @@ def compute_metrics(
             if data_name == "amazon":
                 np.random.seed(seed)
                 idx = np.random.choice(393931, size=130000, replace = False)
-                X, y = X[idx, :], y[idx, :]
+                X, y = X_all[idx, :], y_all[idx]
                 
              # splitting data into train, test and calibration sets
             data = split(
@@ -526,7 +539,7 @@ def compute_metrics(
             times[it, 6] = end_split
 
             # predictions
-            icp_pred = icp.predict(X_test, significance=sig)
+            icp_pred = icp.predict(X_test)
 
             # icp smis
             smis_vector[it, 6] = smis(icp_pred, y_test, alpha=sig)
@@ -714,7 +727,24 @@ if __name__ == "__main__":
         random_state = 650
 
         print("Starting real data experiment")
-        exp_time = compute_metrics(
+        if data_name == "amazon":
+            exp_time = compute_metrics(
+            n_it=it,
+            data_name=data_name,
+            base_model=RandomForestRegressor,
+            random_state=random_state,
+            min_samples_leaf = 500,
+        )
+        elif data_name == "yearprediction":
+            exp_time = compute_metrics(
+            n_it=it,
+            data_name=data_name,
+            base_model=RandomForestRegressor,
+            random_state=random_state,
+            min_samples_leaf = 2500,
+        )
+        else:
+            exp_time = compute_metrics(
             n_it=it,
             data_name=data_name,
             base_model=RandomForestRegressor,
