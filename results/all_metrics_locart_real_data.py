@@ -137,7 +137,13 @@ def compute_metrics(
                 print("running {} iteration for {} data".format(it + 1, data_name))
             seed = random_seeds[it]
 
-            # splitting data into train, test and calibration sets
+            #  if running amazon data, making a subsample of the total amount, using 130000
+            if data_name == "amazon":
+                np.random.seed(seed)
+                idx = np.random.choice(393931, size=130000, replace = False)
+                X, y = X[idx, :], y[idx, :]
+                
+             # splitting data into train, test and calibration sets
             data = split(
                 X,
                 y,
