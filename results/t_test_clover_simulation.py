@@ -5,6 +5,7 @@ import os
 from os import path
 import pandas as pd
 import scipy.stats as st
+from matplotlib.colors import LogNorm, Normalize
 
 # 9 columns in raw data
 # first column is normal locart
@@ -436,7 +437,7 @@ plt.savefig(f"{images_dir}/{results_p}.pdf")
 
 
 # t-test correlation matrix
-cor_mat_dict_list = []
+cor_mat_all_dict = {}
 
 methods = [
     "locart",
@@ -450,7 +451,10 @@ methods = [
     "mondrian",
 ]
 
+counter = 0
 for data_t in data_list_t:
+    kind = kind_names[counter]
+    print(kind)
     mat_dict = {}
     for p in p_chosen:
         data_t_p = data_t.query("p == @p")
@@ -465,62 +469,82 @@ for data_t in data_list_t:
                 cor_mat[i, j] = data_filtered.loc[:, "p_value"].values[0]
                 cor_mat[j, i] = cor_mat[i, j]
         mat_dict[p] = cor_mat
-    cor_mat_dict_list.append(mat_dict)
+    cor_mat_all_dict[kind] = mat_dict
+    counter += 1
 
 
-# plotting correlation matrix
+# plotting correlation matrix in groups
+# group 1: homoscedastic, t-residuals, asymmetric, asymmetric-V2
+# group 2: correlated heteroscedastic, splitted_exp, heteroscedastic, non correlated heteroscedastic
+list_1, list_2 = (
+    [
+        "homoscedastic",
+        "t_residuals",
+        "asymmetric",
+        "asymmetric_V2",
+    ],
+    [
+        "heteroscedastic",
+        "non_cor_heteroscedastic",
+        "correlated_heteroscedastic",
+        "splitted_exp",
+    ],
+)
+
+groups_list = [list_1, list_2]
+
+names_list = [
+    ["Homosc.", "t-residuals", "Asym.", "Asym. 2"],
+    ["Heterosc.", "Non-corr. heterosc.", "Corr. heterosc.", "N-Exp. residuals"],
+]
+
 # creating subplots
 # looping through p
 count = 0
-for kind in kind_names:
-    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(14, 8))
-    cor_dict = cor_mat_dict_list[count]
-    fig_corr = "heatmaps/p_values_{}".format(kind)
-    for p_sel, ax in zip(p_chosen, axs):
-        cor_mat = np.round(cor_dict[p_sel], 3)
+for group, names in zip(groups_list, names_list):
+    fig, axs = plt.subplots(
+        nrows=4, ncols=3, figsize=(16, 20), sharex=True, sharey=True
+    )
+    cbar_ax = fig.add_axes([0.91, 0.3, 0.03, 0.4])
+    fig_corr = "heatmaps/p_values_simulated_part_{}".format(count + 1)
+    i = 0
+    ax_list = axs.flatten()
+    for kind, name in zip(group, names):
+        cor_dict = cor_mat_all_dict[kind]
+        for p_sel in p_chosen:
+            cor_mat = np.round(cor_dict[p_sel], 3)
+            # plotting heatmap
+            mask = np.zeros_like(cor_mat)
+            mask[np.triu_indices_from(mask, k=1)] = True
+            ax = ax_list[i]
+            ax.set_aspect("equal")
+            event = i > 0
 
-        # plotting heatmap
-        mask = np.zeros_like(cor_mat)
-        mask[np.triu_indices_from(mask, k=1)] = True
+            sns.heatmap(
+                cor_mat,
+                xticklabels=methods,
+                yticklabels=methods,
+                cmap="YlGnBu",
+                annot=True,
+                fmt="",
+                ax=ax,
+                square=True,
+                cbar_kws={"shrink": 0.6},
+                annot_kws={"fontsize": 8},
+                cbar=(i == 0),
+                vmin=0,
+                vmax=1,
+                mask=mask,
+                cbar_ax=None if event else cbar_ax,
+            )
+            # setting title in each subplot
+            ax.title.set_text("{}, p = {}".format(name, p_sel))
+            ax.tick_params(labelsize=10)
+            i += 1
 
-        sns.heatmap(
-            cor_mat,
-            xticklabels=methods,
-            yticklabels=methods,
-            annot=True,
-            cmap="Blues",
-            ax=ax,
-            square=True,
-            cbar_kws={"shrink": 0.4},
-            annot_kws={"fontsize": 6},
-            mask=mask,
-        )
-        # setting title in each subplot
-        ax.title.set_text("p = {}".format(p_sel))
-        ax.tick_params(labelsize=8.25)
-    count += 1
     # saving figure in correlation folder
-    plt.tight_layout()
+    fig.tight_layout(rect=[0, 0, 0.9, 1])
+    plt.subplots_adjust(wspace=0, hspace=0.1)
     plt.savefig(f"{images_dir}/{fig_corr}.pdf")
-
+    count += 1
 plt.close()
-
-# plotting heatmap
-sns.heatmap(
-    cor_mat,
-    xticklabels=cor_mat.columns,
-    yticklabels=cor_mat.columns,
-    annot=True,
-    cmap="Blues",
-    ax=ax,
-    square=True,
-    cbar_kws={"shrink": 0.4},
-)
-# setting title in each subplot
-ax.title.set_text("p = {}".format(p_sel))
-ax.tick_params(labelsize=8.25)
-
-
-# saving figure in correlation folder
-plt.tight_layout()
-plt.savefig(f"{images_dir}/{fig_corr}.pdf")

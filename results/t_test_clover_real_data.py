@@ -443,6 +443,9 @@ kind_names = [
     "bike",
     "star",
     "meps19",
+    "WEC",
+    "SGMM",
+    "amazon",
 ]
 
 counter = 0
@@ -462,8 +465,13 @@ for data_t in data_list_t:
 
 images_dir = "results/metric_figures/performance_real"
 
-first_data_order = ["concrete", "airfoil", "winewhite", "star", "winered", "cycle"]
-second_data_order = [
+first_data_order = [
+    "concrete",
+    "airfoil",
+    "winewhite",
+    "star",
+    "winered",
+    "cycle",
     "electric",
     "bike",
     "meps19",
@@ -471,13 +479,26 @@ second_data_order = [
     "news",
     "protein",
 ]
+second_data_order = [
+    "WEC",
+    "SGMM",
+    "amazon",
+]
 list_order = [first_data_order, second_data_order]
 # plotting correlation matrix
 # creating subplots
 # looping through p
 count = 0
 for i in range(0, 2):
-    fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(16, 10))
+    if i < 1:
+        fig, axs = plt.subplots(
+            nrows=4, ncols=3, figsize=(16, 20), sharex=True, sharey=True
+        )
+    else:
+        fig, axs = plt.subplots(
+            nrows=2, ncols=2, figsize=(16, 10), sharex=True, sharey=True
+        )
+    cbar_ax = fig.add_axes([0.91, 0.3, 0.03, 0.4])
     fig_corr = "heatmaps/p_values_part{}".format(i + 1)
     j = 0
     for data, ax in zip(list_order[i], axs.flatten()):
@@ -487,26 +508,33 @@ for i in range(0, 2):
         # plotting heatmap
         mask = np.zeros_like(cor_mat)
         mask[np.triu_indices_from(mask, k=1)] = True
+        ax.set_aspect("equal")
+        event = j > 0
 
         sns.heatmap(
             cor_mat,
             xticklabels=methods,
             yticklabels=methods,
+            cmap="YlGnBu",
             annot=True,
-            cmap="Blues",
+            fmt="",
             ax=ax,
             square=True,
-            cbar_kws={"shrink": 0.4},
-            annot_kws={"fontsize": 6},
+            cbar_kws={"shrink": 0.6},
+            annot_kws={"fontsize": 8},
+            cbar=(j == 0),
+            vmin=0,
+            vmax=1,
             mask=mask,
+            cbar_ax=None if event else cbar_ax,
         )
         # setting title in each subplot
         ax.title.set_text("data = {}".format(data))
-        ax.tick_params(labelsize=8.25)
+        ax.tick_params(labelsize=10)
         count += 1
         j += 1
     # saving figure in correlation folder
-    plt.tight_layout()
+    fig.tight_layout(rect=[0, 0, 0.9, 1])
     plt.savefig(f"{images_dir}/{fig_corr}.pdf")
 
 plt.close()
