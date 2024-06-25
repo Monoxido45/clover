@@ -246,7 +246,9 @@ class simulation:
                 (X[:, 0] ** 2)
                 + (
                     (X[:, 0] <= 0)
-                    * np.random.normal(0, self.hetero_exp + np.abs(X[:, 0]), size=n)
+                    * np.random.normal(
+                        0, np.sqrt(self.hetero_exp + np.abs(X[:, 0])), size=n
+                    )
                 )
                 + (
                     (X[:, 0] > 0)
@@ -260,8 +262,10 @@ class simulation:
                     (np.mean(X[:, np.arange(0, self.vars)], axis=1) <= 0)
                     * np.random.normal(
                         0,
-                        self.hetero_exp
-                        + np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1)),
+                        np.sqrt(
+                            self.hetero_exp
+                            + np.abs(np.mean(X[:, np.arange(0, self.vars)], axis=1))
+                        ),
                         size=n,
                     )
                 )
