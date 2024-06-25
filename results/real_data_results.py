@@ -144,25 +144,31 @@ def create_data_times(
             + "/{}_data_score_regression_measures".format(data_name)
         )
 
-        # importing the correction
-        correction_folder = (
-            original_path
-            + folder_path
-            + "/{}_data_score_regression_model_time".format(data_name)
-        )
+        # not importing correction if data name is amazon
+        if data_name != "amazon" and data_name != "yearprediction":
+            # importing the correction
+            correction_folder = (
+                original_path
+                + folder_path
+                + "/{}_data_score_regression_model_time".format(data_name)
+            )
 
+            correction_data = np.load(
+                correction_folder
+                + "/"
+                + "model_running_time_{}_data.npy".format(data_name)
+            )
+        print(data_name)
         # only one string name
         current_data = np.load(
             current_folder + "/" + string + "_{}_data.npy".format(data_name)
-        )
-        correction_data = np.load(
-            correction_folder + "/" + "model_running_time_{}_data.npy".format(data_name)
         )
 
         # removing rows with only zeroes
         current_data = current_data[~np.all(current_data == 0, axis=1)]
 
-        current_data[:, 6] = np.abs(current_data[:, 6] - correction_data)
+        if data_name != "amazon" and data_name != "yearprediction":
+            current_data[:, 6] = np.abs(current_data[:, 6] - correction_data)
 
         # obtaining proportions by row
         prop_data = current_data / np.sum(current_data, axis=1)[:, None]
@@ -203,6 +209,7 @@ data_names = [
     "meps19",
     "WEC",
     "SGEMM",
+    "amazon",
 ]
 
 for data in data_names:

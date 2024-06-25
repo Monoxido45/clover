@@ -122,6 +122,7 @@ def create_all_data_t(
         "meps19",
         "WEC",
         "SGEMM",
+        "amazon",
     ],
 ):
     data_list_t = []
@@ -160,6 +161,7 @@ kind_names = [
     "meps19",
     "WEC",
     "SGEMM",
+    "amazon",
 ]
 
 
