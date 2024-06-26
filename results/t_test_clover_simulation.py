@@ -6,6 +6,7 @@ from os import path
 import pandas as pd
 import scipy.stats as st
 from matplotlib.colors import LogNorm, Normalize
+from matplotlib import colors
 
 # 9 columns in raw data
 # first column is normal locart
@@ -38,8 +39,8 @@ def create_data_t(
         "loforest",
         "A-locart",
         "A-loforest",
-        "W-loforest",
         "QRF-TC",
+        "W-loforest",
         "reg-split",
         "W-reg-split",
         "mondrian",
@@ -162,6 +163,8 @@ p_chosen = [1, 3, 5]
 our_method = ["locart", "loforest", "A-locart", "A-loforest", "W-loforest"]
 baselines = ["QRF-TC", "mondrian", "reg-split", "W-reg-split"]
 
+sig_corrected = 0.05 / 36
+
 # running through data_list to compare our best method with the best baseline
 p_value_list, p_list = list(), list()
 best_method, kind_list = list(), list()
@@ -214,15 +217,23 @@ for data_t, data_diff in zip(data_list_t, mean_values_list):
         )
 
         # returning p-values
-        p_value = (
-            data_t_p.query("method_1 in @our_best_method")
-            .query("method_2 in @baseline_best_method")["p_value"]
-            .values[0]
-        )
+        # checking if method is qrf-tc
+        if baseline_best_method == "QRF-TC" and our_best_method == "W-loforest":
+            p_value = (
+                data_t_p.query("method_1 in @baseline_best_method")
+                .query("method_2 in @our_best_method")["p_value"]
+                .values[0]
+            )
+        else:
+            p_value = (
+                data_t_p.query("method_1 in @our_best_method")
+                .query("method_2 in @baseline_best_method")["p_value"]
+                .values[0]
+            )
         p_value_list.append(p_value)
-        if our_diff < baseline_diff and p_value < 0.01:
+        if our_diff < baseline_diff and p_value < sig_corrected:
             best_method.append("Our method")
-        elif our_diff > baseline_diff and p_value < 0.01:
+        elif our_diff > baseline_diff and p_value < sig_corrected:
             best_method.append("Baseline")
         else:
             best_method.append("Tie")
@@ -277,7 +288,7 @@ for data_t, data_diff in zip(data_list_t, mean_values_list):
                     )
                 p_val = data_filtered.loc[:, "p_value"].values[0]
 
-                if p_val > 0.01:
+                if p_val > sig_corrected:
                     counts_dict[method] += 1
 
 counts_dict
@@ -319,7 +330,7 @@ for data_t, data_diff in zip(data_list_t, mean_values_list):
                     )
                 p_val = data_filtered.loc[:, "p_value"].values[0]
 
-                if p_val > 0.01:
+                if p_val > sig_corrected:
                     counts_dict[method] += 1
 
 counts_dict
@@ -347,8 +358,8 @@ methods = [
     "loforest",
     "A-locart",
     "A-loforest",
-    "W-loforest",
     "QRF-TC",
+    "W-loforest",
     "reg-split",
     "W-reg-split",
     "mondrian",
@@ -378,7 +389,7 @@ for data_t, data_diff in zip(data_list_t, mean_values_list):
                     )
                 p_val = data_filtered.loc[:, "p_value"].values[0]
 
-                if p_val > 0.01:
+                if p_val > sig_corrected:
                     counts_dict[method] += 1
 
 counts_dict
@@ -437,6 +448,7 @@ plt.savefig(f"{images_dir}/{results_p}.pdf")
 
 
 # t-test correlation matrix
+# generating correlation matrix
 cor_mat_all_dict = {}
 
 methods = [
@@ -444,8 +456,8 @@ methods = [
     "loforest",
     "A-locart",
     "A-loforest",
-    "W-loforest",
     "QRF-TC",
+    "W-loforest",
     "reg-split",
     "W-reg-split",
     "mondrian",
@@ -513,9 +525,14 @@ for group, names in zip(groups_list, names_list):
         cor_dict = cor_mat_all_dict[kind]
         for p_sel in p_chosen:
             cor_mat = np.round(cor_dict[p_sel], 3)
-            # plotting heatmap
+            # create discrete colormap
+            cmap = colors.ListedColormap(sns.color_palette("Paired", 2).as_hex())
+            bounds = [0, 0.001389, 1]
+            norm = colors.BoundaryNorm(bounds, cmap.N)
+            # create mask for values below sig_corrected
             mask = np.zeros_like(cor_mat)
             mask[np.triu_indices_from(mask, k=1)] = True
+            # create custom color map
             ax = ax_list[i]
             ax.set_aspect("equal")
             event = i > 0
@@ -524,19 +541,24 @@ for group, names in zip(groups_list, names_list):
                 cor_mat,
                 xticklabels=methods,
                 yticklabels=methods,
-                cmap="YlGnBu",
+                cmap=cmap,
+                norm=norm,
                 annot=True,
                 fmt="",
                 ax=ax,
                 square=True,
-                cbar_kws={"shrink": 0.6},
+                cbar_kws={"shrink": 0.6, "ticks": range(2)},
                 annot_kws={"fontsize": 8},
                 cbar=(i == 0),
-                vmin=0,
-                vmax=1,
                 mask=mask,
                 cbar_ax=None if event else cbar_ax,
+                linewidths=0.5,
+                linecolor="lightgray",
             )
+            if not event:
+                colorbar = ax.collections[0].colorbar
+                colorbar.set_ticks([0, 1])
+                colorbar.set_ticklabels(["Reject", "Not Reject"])
             # setting title in each subplot
             ax.title.set_text("{}, p = {}".format(name, p_sel))
             ax.tick_params(labelsize=10)

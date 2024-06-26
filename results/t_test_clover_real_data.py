@@ -5,6 +5,7 @@ import os
 from os import path
 import pandas as pd
 import scipy.stats as st
+from matplotlib import colors
 
 # 9 columns in raw data
 # first column is normal locart
@@ -24,6 +25,7 @@ sns.set_palette("tab10")
 plt.rcParams.update({"font.size": 12})
 
 
+# checking some cases
 # function to construct t-test dataframe
 def create_data_t(
     data_name,
@@ -35,8 +37,8 @@ def create_data_t(
         "loforest",
         "A-locart",
         "A-loforest",
-        "W-loforest",
         "QRF-TC",
+        "W-loforest",
         "reg-split",
         "W-reg-split",
         "mondrian",
@@ -64,13 +66,14 @@ def create_data_t(
         )
 
         # multiple comparisons with paired-t test
-        p_value_list = list()
+        p_value_list, stat_value_list = list(), list()
         method_1, method_2 = list(), list()
         for k in range(0, len(methods)):
             for j in range(k + 1, len(methods)):
                 t_array_1, t_array_2 = smis_data[:, k], smis_data[:, j]
                 test_array = st.ttest_rel(t_array_1, t_array_2)
                 p_value_list.append(test_array[1])
+                stat_value_list.append(test_array[0])
                 method_1.append(methods[k])
                 method_2.append(methods[j])
 
@@ -97,7 +100,12 @@ def create_data_t(
         )
 
         t_df = pd.DataFrame(
-            {"p_value": p_value_list, "method_1": method_1, "method_2": method_2}
+            {
+                "p_value": p_value_list,
+                "stat_value": stat_value_list,
+                "method_1": method_1,
+                "method_2": method_2,
+            }
         )
 
         t_df["p_value"] = t_df["p_value"].fillna(1)
@@ -123,6 +131,7 @@ def create_all_data_t(
         "WEC",
         "SGEMM",
         "amazon",
+        "yearprediction",
     ],
 ):
     data_list_t = []
@@ -162,8 +171,10 @@ kind_names = [
     "WEC",
     "SGEMM",
     "amazon",
+    "yearprediction",
 ]
 
+sig_corrected = 0.05 / 36
 
 # overall comparisson
 counter = 0
@@ -200,16 +211,24 @@ for data_t, data_smis in zip(data_list_t, data_list_smis):
     )
 
     # returning p-values
-    p_value = (
-        data_t.query("method_1 in @our_best_method")
-        .query("method_2 in @baseline_best_method")["p_value"]
-        .values[0]
-    )
+    # checking if method is qrf-tc
+    if baseline_best_method == "QRF-TC" and our_best_method == "W-loforest":
+        p_value = (
+            data_t.query("method_1 in @baseline_best_method")
+            .query("method_2 in @our_best_method")["p_value"]
+            .values[0]
+        )
+    else:
+        p_value = (
+            data_t.query("method_1 in @our_best_method")
+            .query("method_2 in @baseline_best_method")["p_value"]
+            .values[0]
+        )
 
     p_value_list.append(p_value)
-    if our_smis > baseline_smis and p_value < 0.01:
+    if our_smis > baseline_smis and p_value < sig_corrected:
         best_method.append("Our method")
-    elif our_smis < baseline_smis and p_value < 0.01:
+    elif our_smis < baseline_smis and p_value < sig_corrected:
         best_method.append("Baseline")
     else:
         best_method.append("Tie")
@@ -261,7 +280,7 @@ for data_t, data_smis in zip(data_list_t, data_list_smis):
                 )
             p_val = data_filtered.loc[:, "p_value"].values[0]
 
-            if p_val > 0.01:
+            if p_val > sig_corrected:
                 counts_dict[method] += 1
 
 counts_dict
@@ -273,7 +292,7 @@ ordered_counts_dict_conf = dict(
 
 # comparisson between only non-conformal methods
 counts_dict = {"loforest": 0, "A-loforest": 0, "W-loforest": 0, "QRF-TC": 0}
-non_conf_methods = ["loforest", "A-loforest", "W-loforest", "QRF-TC"]
+non_conf_methods = ["loforest", "A-loforest", "QRF-TC", "W-loforest"]
 
 
 for data_t, data_smis in zip(data_list_t, data_list_smis):
@@ -291,6 +310,7 @@ for data_t, data_smis in zip(data_list_t, data_list_smis):
             best_idx, method_idx = non_conf_methods.index(
                 best_method
             ), non_conf_methods.index(method)
+
             if best_idx < method_idx:
                 data_filtered = data_t.query(
                     "method_1 == @best_method & method_2 == @method"
@@ -301,7 +321,7 @@ for data_t, data_smis in zip(data_list_t, data_list_smis):
                 )
             p_val = data_filtered.loc[:, "p_value"].values[0]
 
-            if p_val > 0.01:
+            if p_val > sig_corrected:
                 counts_dict[method] += 1
 
 counts_dict
@@ -329,8 +349,8 @@ methods = [
     "loforest",
     "A-locart",
     "A-loforest",
-    "W-loforest",
     "QRF-TC",
+    "W-loforest",
     "reg-split",
     "W-reg-split",
     "mondrian",
@@ -356,7 +376,7 @@ for data_t, data_smis in zip(data_list_t, data_list_smis):
                 )
             p_val = data_filtered.loc[:, "p_value"].values[0]
 
-            if p_val > 0.01:
+            if p_val > sig_corrected:
                 counts_dict[method] += 1
 
 counts_dict
@@ -368,7 +388,7 @@ ordered_counts_dict_all
 
 # plotting barplot and saving
 images_dir = "results/metric_figures"
-results_real = "performance_real/t_results/general_results"
+results_real = "performance_real/t_results/smis_barplot"
 
 # plotting count of data into two barplots
 fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(12, 6))
@@ -423,8 +443,8 @@ methods = [
     "loforest",
     "A-locart",
     "A-loforest",
-    "W-loforest",
     "QRF-TC",
+    "W-loforest",
     "reg-split",
     "W-reg-split",
     "mondrian",
@@ -446,6 +466,7 @@ kind_names = [
     "WEC",
     "SGMM",
     "amazon",
+    "yearprediction",
 ]
 
 counter = 0
@@ -483,6 +504,7 @@ second_data_order = [
     "WEC",
     "SGMM",
     "amazon",
+    "yearprediction",
 ]
 list_order = [first_data_order, second_data_order]
 # plotting correlation matrix
@@ -496,7 +518,7 @@ for i in range(0, 2):
         )
     else:
         fig, axs = plt.subplots(
-            nrows=2, ncols=2, figsize=(16, 10), sharex=True, sharey=True
+            nrows=2, ncols=2, figsize=(14, 10), sharex=True, sharey=True
         )
     cbar_ax = fig.add_axes([0.91, 0.3, 0.03, 0.4])
     fig_corr = "heatmaps/p_values_part{}".format(i + 1)
@@ -505,9 +527,15 @@ for i in range(0, 2):
         cor_dict = mat_dict[data]
         cor_mat = np.round(cor_dict, 3)
 
+        # create discrete colormap
+        cmap = colors.ListedColormap(sns.color_palette("Paired", 2).as_hex())
+        bounds = [0, 0.001389, 1]
+        norm = colors.BoundaryNorm(bounds, cmap.N)
+
         # plotting heatmap
         mask = np.zeros_like(cor_mat)
         mask[np.triu_indices_from(mask, k=1)] = True
+
         ax.set_aspect("equal")
         event = j > 0
 
@@ -515,19 +543,26 @@ for i in range(0, 2):
             cor_mat,
             xticklabels=methods,
             yticklabels=methods,
-            cmap="YlGnBu",
+            cmap=cmap,
+            norm=norm,
             annot=True,
             fmt="",
             ax=ax,
             square=True,
-            cbar_kws={"shrink": 0.6},
+            cbar_kws={"shrink": 0.6, "ticks": range(2)},
             annot_kws={"fontsize": 8},
             cbar=(j == 0),
-            vmin=0,
-            vmax=1,
             mask=mask,
             cbar_ax=None if event else cbar_ax,
+            linewidths=0.5,
+            linecolor="lightgray",
         )
+
+        if not event:
+            colorbar = ax.collections[0].colorbar
+            colorbar.set_ticks([0, 1])
+            colorbar.set_ticklabels(["Reject", "Not Reject"])
+
         # setting title in each subplot
         ax.title.set_text("data = {}".format(data))
         ax.tick_params(labelsize=10)

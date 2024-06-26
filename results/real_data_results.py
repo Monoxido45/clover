@@ -210,6 +210,7 @@ data_names = [
     "WEC",
     "SGEMM",
     "amazon",
+    "yearprediction",
 ]
 
 for data in data_names:
@@ -225,15 +226,20 @@ def plot_results(
     exp_path="/results/pickle_files/real_data_experiments/",
 ):
 
-    figname = "performance_real/smis_performance"
-    marginal_cover = "performance_real/marginal_coverage"
+    figname_small = "performance_real/smis_performance_small"
+    figname_big = "performance_real/smis_performance_big"
+    marginal_cover = "performance_real/marginal_coverage_small"
+    marginal_cover_big = "performance_real/marginal_coverage_big"
     barplot_res = "performance_real/smis_barplot"
     run_time_prop = "performance_real/running_time_plot"
 
     our_methods = ["locart", "A-locart", "loforest", "A-loforest", "W-loforest"]
     data_list = []
+    data_big_list = []
     time_data_list = []
     original_time_data_list = []
+    data_names_big = ["WEC", "SGEMM", "amazon", "yearprediction"]
+
     for name in data_names_list:
         folder_path = exp_path + name + "_data"
         # first creating the data list to be plotted
@@ -243,6 +249,9 @@ def plot_results(
             .assign(data=name)
         )
         data_list.append(current_data)
+
+        if name in data_names_big:
+            data_big_list.append(current_data)
 
         # time data
         time_data = pd.read_csv(
@@ -256,6 +265,7 @@ def plot_results(
         original_time_data_list.append(original_time_data)
 
     data_main = pd.concat(data_list)
+    data_main_big = pd.concat(data_big_list)
     original_time_data = pd.concat(original_time_data_list)
     time_data = pd.concat(time_data_list)
     data_w = ["concrete", "protein"]
@@ -292,8 +302,10 @@ def plot_results(
 
     # with the final data in hands, we can plot the line plots as desired
     # faceting all in a seaborn plot
+
+    # plotting only medium and small sized data
     g = sns.FacetGrid(
-        data_main.query("stats in @vars_to_plot"),
+        data_main.query("stats in @vars_to_plot").query("data not in @data_names_big"),
         col="data",
         col_wrap=3,
         hue="methods",
@@ -324,7 +336,42 @@ def plot_results(
                 ax.get_xticklabels()[idx].set_fontweight("bold")
 
     plt.tight_layout()
-    plt.savefig(f"{images_dir}/{figname}.pdf", bbox_inches="tight")
+    plt.savefig(f"{images_dir}/{figname_small}.pdf", bbox_inches="tight")
+
+    # plotting only big sized data
+    g = sns.FacetGrid(
+        data_main.query("stats in @vars_to_plot").query("data in @data_names_big"),
+        col="data",
+        col_wrap=2,
+        hue="methods",
+        despine=False,
+        margin_titles=True,
+        legend_out=True,
+        sharey=False,
+        height=4,
+    )
+    g.map(plt.errorbar, "methods", "value", "sd", marker="o")
+    g.map(plt.axvline, x=4.5, color="k", linestyle="dashed")
+    g.figure.subplots_adjust(wspace=0, hspace=0)
+    g.add_legend(bbox_to_anchor=(1.2, 0.5), title="Methods")
+    legend = g.legend
+    for text in legend.get_texts():
+        if text.get_text() in our_methods:
+            text.set_fontweight("bold")
+
+    g.set_ylabels("SMIS values")
+    g.set_xlabels("Methods")
+    g.set_xticklabels(rotation=45)
+    g.set_titles(col_template="{col_name}")
+
+    # transforming some labels into bold
+    for ax in g.axes.flatten():
+        if len(ax.get_xticklabels()) != 0:
+            for idx in [0, 1, 5, 6, 7]:
+                ax.get_xticklabels()[idx].set_fontweight("bold")
+
+    plt.tight_layout()
+    plt.savefig(f"{images_dir}/{figname_big}.pdf", bbox_inches="tight")
 
     # plotting methods with best performance in barplot
     # now with better smis
@@ -419,8 +466,12 @@ def plot_results(
     plt.savefig(f"{images_dir}/{run_time_prop}.pdf", bbox_inches="tight")
 
     # plotting marginal coverage values
+
+    # first for small data
     g = sns.FacetGrid(
-        data_main.query("stats == 'mean_coverage'"),
+        data_main.query("stats == 'mean_coverage'").query(
+            "data not in @data_names_big"
+        ),
         col="data",
         col_wrap=3,
         hue="methods",
@@ -453,6 +504,42 @@ def plot_results(
 
     plt.tight_layout()
     plt.savefig(f"{images_dir}/{marginal_cover}.pdf", bbox_inches="tight")
+
+    # now for big data
+    g = sns.FacetGrid(
+        data_main.query("stats == 'mean_coverage'").query("data in @data_names_big"),
+        col="data",
+        col_wrap=2,
+        hue="methods",
+        despine=False,
+        margin_titles=True,
+        legend_out=True,
+        sharey=True,
+        height=4,
+    )
+    g.map(plt.errorbar, "methods", "value", "sd", marker="o")
+    g.map(plt.axhline, y=0.9, ls="--", c="red")
+    g.map(plt.axvline, x=4.5, color="k", linestyle="dashed")
+
+    g.figure.subplots_adjust(wspace=0, hspace=0)
+    g.add_legend(bbox_to_anchor=(1.2, 0.5), title="Methods")
+    legend = g.legend
+    for text in legend.get_texts():
+        if text.get_text() in our_methods:
+            text.set_fontweight("bold")
+
+    g.set_ylabels("Marginal Coverage")
+    g.set_xlabels("Methods")
+    g.set_xticklabels(rotation=45)
+    g.set_titles(col_template="{col_name}")
+
+    for ax in g.axes.flatten():
+        if len(ax.get_xticklabels()) != 0:
+            for idx in [0, 1, 5, 6, 7]:
+                ax.get_xticklabels()[idx].set_fontweight("bold")
+
+    plt.tight_layout()
+    plt.savefig(f"{images_dir}/{marginal_cover_big}.pdf", bbox_inches="tight")
 
     # returning data final to plot more general graphs
     plt.close("all")
