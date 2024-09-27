@@ -2,12 +2,25 @@
 
 **Clover** is a Python package that introduces a novel class of methods for constructing local prediction intervals around regression point estimates, ensuring local coverage guarantees. Our methodology hinges on the creation of a feature space partition that closely approximates conditional coverage. This is achieved by fitting regression trees and Random Forests on conformity scores.
 
-Our approach finds an optimal balance between theoretical robustness and practical efficiency. We construct prediction intervals that not only offer solid theoretical assurances, including marginal, local, and asymptotic conditional coverage, but also demonstrate superior scalability and performance when compared to conventional baselines. As a result, **clover** provides easily accessible adaptive prediction intervals, offering a more accurate representation of model uncertainty in regression problems.
+Our approach finds an optimal balance between theoretical robustness and practical efficiency. We construct prediction intervals that offer solid theoretical assurances, including marginal, local, and asymptotic conditional coverage and demonstrate superior scalability and performance compared to conventional baselines. As a result, **clover** provides easily accessible adaptive prediction intervals, offering a more accurate representation of model uncertainty in regression problems.
 
-All methods, experiments and properties are more detailed in the paper:
+All methods, experiments, and properties are more detailed in the paper:
 
-[Cabezas, L.M.C., Otto M.P., Izbicki R., Stern R.B. (2024). Regression Trees for Fast and Adaptive Prediction Intervals. arXiv preprint arXiv:2402.07357](https://arxiv.org/abs/2402.07357)
+[Cabezas, L. M., Otto, M. P., Izbicki, R., & Stern, R. B. (2025). Regression trees for fast and adaptive prediction intervals.
+Information Sciences, 686, 121369.]([check arxiv version here](https://arxiv.org/abs/2402.07357))
 
+Please cite us in the following way:
+```
+@article{cabezas2025regression,
+  title={Regression trees for fast and adaptive prediction intervals},
+  author={Cabezas, Luben MC and Otto, Mateus P and Izbicki, Rafael and Stern, Rafael B},
+  journal={Information Sciences},
+  volume={686},
+  pages={121369},
+  year={2025},
+  publisher={Elsevier}
+}
+```
 ## Instalation
 
 Clone the repo and run the following command in the clover directory to install clover
